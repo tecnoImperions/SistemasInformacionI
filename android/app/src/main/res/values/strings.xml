@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IPCB IMPORT</string>
+    <string name="title_activity_main">IPCB IMPORT</string>
+    <string name="package_name">com.ipcb.import</string>
+    <string name="custom_url_scheme">com.ipcb.import</string>
+</resources>
