@@ -25,6 +25,21 @@ export default function ProductosPage() {
 
   useEffect(() => {
     fetchProductos()
+
+    const channel = supabase
+      .channel('productos-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'productos' },
+        (payload) => {
+          fetchProductos()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [debouncedSearch])
 
   async function fetchProductos() {

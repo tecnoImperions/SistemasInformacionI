@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { uploadImage, getOptimizedUrl } from '../lib/cloudinary';
 import { useStore } from '../lib/store';
-import { Search, Plus, Edit2, X, Image as ImageIcon, Package, Filter, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Search, Plus, Edit2, X, Image as ImageIcon, Package, Filter, ArrowUpCircle, ArrowDownCircle, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 export default function Catalogo({ addToast }) {
   const { tipoCambio } = useStore();
@@ -56,13 +57,30 @@ export default function Catalogo({ addToast }) {
   useEffect(() => {
     fetchData();
 
+    // 1. Suscripción a cambios en tiempo real
+    const channel = supabase
+      .channel('catalogo-admin-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'catalogo_piezas' },
+        (payload) => {
+          fetchData(); // Recarga los datos cuando alguien más modifique, añada o elimine una pieza
+        }
+      )
+      .subscribe();
+
     function handleClickOutside(event) {
       if (categoryRef.current && !categoryRef.current.contains(event.target)) {
         setShowCategoryDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    
+    // 2. Limpieza al desmontar
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -202,7 +220,7 @@ export default function Catalogo({ addToast }) {
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
-      const { data, error } = await supabase.from('categorias').insert([{ nombre: newCategoryName.trim() }]).select().single();
+      const { data, error } = await supabase.from('categorias').insert([{ nombre: newCategoryName.trim(), usuario_id: userProfile?.id || null }]).select().single();
       if (error) throw error;
       setCategorias([...categorias, data]);
       setFormData(prev => ({ ...prev, id_categoria: data.id_categoria }));
@@ -250,7 +268,8 @@ export default function Catalogo({ addToast }) {
         precio_referencial: formData.precio_referencial ? parseFloat(formData.precio_referencial) : null,
         id_categoria: formData.id_categoria,
         imagen_url: publicId,
-        disponible: formData.disponible
+        disponible: formData.disponible,
+        usuario_id: userProfile?.id || null
       };
 
       if (selectedPieza) {
@@ -332,6 +351,31 @@ export default function Catalogo({ addToast }) {
     setShowOfertaModal(false);
   };
 
+  const handleDeletePiece = async (pieza) => {
+    Swal.fire({
+      title: '¿Eliminar Pieza?',
+      html: `Estás a punto de eliminar <strong>"${pieza.nombre}"</strong> del catálogo.<br/>Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#6B7280',
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        try {
+          const { error } = await supabase.from('catalogo_piezas').delete().eq('id_pieza', pieza.id_pieza);
+          if (error) throw error;
+          if (addToast) addToast('Éxito', 'Pieza eliminada correctamente', 'success');
+          fetchData();
+        } catch (err) {
+          console.error(err);
+          if (addToast) addToast('Error', 'No se pudo eliminar la pieza', 'error');
+        }
+      }
+    });
+  };
+
   const processedPiezas = getFilteredAndSortedPiezas();
 
   return (
@@ -411,7 +455,7 @@ export default function Catalogo({ addToast }) {
               }
 
               return (
-                <div key={pieza.id_pieza} className="pieza-card">
+                <div key={pieza.id_pieza} className="pieza-card" style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }} onClick={() => openPanel(pieza)}>
                   <div className="pieza-img-container">
                     {isOferta && (
                       <div className="pieza-oferta-badge">
@@ -455,12 +499,15 @@ export default function Catalogo({ addToast }) {
                     </div>
                   </div>
                   
-                  <div className="pieza-actions">
+                  <div className="pieza-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="pieza-btn" onClick={() => setStockModalPiece(pieza)} title="Gestionar Stock">
                       <Package size={16} color="#10B981" /> STOCK
                     </button>
                     <button className="pieza-btn" onClick={() => openPanel(pieza)} title="Editar Pieza">
                       <Edit2 size={16} color="#3B82F6" /> EDITAR
+                    </button>
+                    <button className="pieza-btn" onClick={() => handleDeletePiece(pieza)} title="Eliminar Pieza">
+                      <Trash2 size={16} color="#EF4444" /> ELIMINAR
                     </button>
                   </div>
                 </div>

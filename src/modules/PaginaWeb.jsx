@@ -17,9 +17,33 @@ export default function PaginaWeb({ addToast }) {
   // Carrito de compras
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [selectedPiece, setSelectedPiece] = useState(null);
 
   useEffect(() => {
     fetchData();
+
+    // 1. Crear la suscripción para escuchar cambios en tiempo real
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escuchar INSERT, UPDATE y DELETE
+          schema: 'public',
+          table: 'catalogo_piezas'
+        },
+        (payload) => {
+          console.log('Cambio detectado en la BD!', payload);
+          // Volvemos a cargar los datos para tener siempre la última versión
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // 2. Limpiar la suscripción cuando el componente se desmonte
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -116,7 +140,7 @@ export default function PaginaWeb({ addToast }) {
     <div className="pagina-web-container" style={{ background: '#F9FAFB', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       
       {/* HEADER PÚBLICO */}
-      <header className="no-print pagina-web-header" style={{ background: 'white', padding: '16px 5%', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 40 }}>
+      <header className="no-print pagina-web-header glass-header" style={{ padding: '16px 5%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 40 }}>
         <div className="pagina-web-header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ fontSize: '22px', fontWeight: '900', color: '#1E3A8A', letterSpacing: '-0.5px' }}>IPBC <span style={{ color: '#F59E0B' }}>Store</span></div>
         </div>
@@ -140,15 +164,23 @@ export default function PaginaWeb({ addToast }) {
 
       {/* CONTENIDO PRINCIPAL */}
       <main className="no-print pagina-web-main" style={{ flex: 1, padding: '40px 5%' }}>
+        
+        {/* HERO SECTION */}
+        <section className="hero-section">
+          <div className="hero-content">
+            <h1 className="hero-title">Encuentra los Mejores Repuestos</h1>
+            <p className="hero-subtitle">Calidad garantizada y los precios más competitivos del mercado. Explora nuestro catálogo premium y lleva tu vehículo al siguiente nivel.</p>
+          </div>
+        </section>
+
         <div className="pagina-web-title-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
           <div>
-            <h1 className="pagina-web-title" style={{ fontSize: '32px', fontWeight: '800', color: '#111827', margin: 0, letterSpacing: '-1px' }}>Catálogo en Línea</h1>
-            <p className="pagina-web-subtitle" style={{ color: '#6B7280', marginTop: '8px' }}>Encuentra los mejores repuestos al mejor precio.</p>
+            <h2 className="pagina-web-title" style={{ fontSize: '28px', fontWeight: '800', color: '#111827', margin: 0, letterSpacing: '-1px' }}>Nuestro Catálogo</h2>
           </div>
           <select 
             value={filterCategoria} 
             onChange={e => setFilterCategoria(e.target.value)}
-            style={{ padding: '10px 16px', border: '1px solid #D1D5DB', borderRadius: '8px', background: '#FFF', fontSize: '14px', outline: 'none', fontWeight: '500' }}
+            style={{ padding: '10px 16px', border: '1px solid #D1D5DB', borderRadius: '8px', background: '#FFF', fontSize: '14px', outline: 'none', fontWeight: '500', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
           >
             <option value="">Todas las Categorías</option>
             {categorias.map(c => <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>)}
@@ -158,38 +190,38 @@ export default function PaginaWeb({ addToast }) {
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#6B7280', fontSize: '18px' }}>Cargando catálogo...</div>
         ) : (
-          <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '24px' }}>
+          <div className="product-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '32px' }}>
             {filteredPiezas.map(pieza => {
               const { bob, originalBob, isOferta, pct } = calculatePrice(pieza);
               
               return (
-                <div key={pieza.id_pieza} style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s', border: '1px solid #F3F4F6' }} className="product-card-hover">
-                  <div style={{ position: 'relative', height: '180px', backgroundColor: '#F9FAFB' }}>
+                <div key={pieza.id_pieza} className="premium-card">
+                  <div className="premium-image-container">
                     {isOferta && (
-                      <div style={{ position: 'absolute', top: '10px', right: '10px', background: '#EF4444', color: 'white', fontSize: '12px', fontWeight: '800', padding: '4px 8px', borderRadius: '4px', zIndex: 10 }}>
+                      <div className="premium-badge">
                         {pct > 0 ? `-${pct}% OFERTA` : 'OFERTA'}
                       </div>
                     )}
                     {pieza.imagen_url ? (
-                      <img src={getOptimizedUrl(pieza.imagen_url, { width: 300, crop: 'fill' })} alt={pieza.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={getOptimizedUrl(pieza.imagen_url, { width: 400, crop: 'fill' })} alt={pieza.nombre} />
                     ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D1D5DB' }}><ImageIcon size={48} /></div>
+                      <div style={{ color: '#D1D5DB' }}><ImageIcon size={64} /></div>
                     )}
                   </div>
                   
-                  <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: '12px', color: '#6B7280', fontWeight: '600', textTransform: 'uppercase' }}>{pieza.marca}</div>
-                    <div style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '4px 0', lineHeight: '1.3' }}>{pieza.nombre}</div>
-                    <div style={{ fontSize: '13px', color: '#9CA3AF', marginBottom: '16px' }}>{pieza.modelo_auto} {pieza.anio ? `(${pieza.anio})` : ''}</div>
+                  <div className="premium-card-body" onClick={() => setSelectedPiece(pieza)} style={{ cursor: 'pointer' }}>
+                    <div className="premium-brand">{pieza.marca || 'GENÉRICO'}</div>
+                    <div className="premium-title">{pieza.nombre}</div>
+                    <div className="premium-model">{pieza.modelo_auto} {pieza.anio ? `(${pieza.anio})` : ''}</div>
                     
-                    <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div className="premium-price-row">
                       <div>
-                        {originalBob && <div style={{ fontSize: '12px', color: '#9CA3AF', textDecoration: 'line-through' }}>Bs. {originalBob.toFixed(2)}</div>}
-                        <div style={{ fontSize: '20px', fontWeight: '800', color: '#1E3A8A' }}>Bs. {bob.toFixed(2)}</div>
+                        {originalBob && <div className="premium-price-original">Bs. {originalBob.toFixed(2)}</div>}
+                        <div className="premium-price-current">Bs. {bob.toFixed(2)}</div>
                       </div>
                       <button 
-                        onClick={() => addToCart(pieza)}
-                        style={{ background: '#10B981', color: 'white', border: 'none', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex' }}
+                        className="premium-add-btn"
+                        onClick={(e) => { e.stopPropagation(); addToCart(pieza); }}
                         title="Añadir al carrito"
                       >
                         <ShoppingCart size={18} />
@@ -202,6 +234,135 @@ export default function PaginaWeb({ addToast }) {
           </div>
         )}
       </main>
+
+      {/* Drawer Animations */}
+      <style>
+        {`
+          @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          .drawer-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            z-index: 60;
+            display: flex;
+            justify-content: flex-end;
+            animation: fadeIn 0.3s forwards;
+          }
+          .drawer-container {
+            background: white;
+            width: 100%;
+            max-width: 480px;
+            height: 100vh;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.25);
+            animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+          }
+          .drawer-content {
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+          }
+          @media (max-width: 768px) {
+            .drawer-overlay {
+              align-items: center;
+              justify-content: center;
+              background: white;
+            }
+            .drawer-container {
+              height: 100vh;
+              width: 100vw;
+              max-width: 100%;
+              border-radius: 0;
+              box-shadow: none;
+              animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+          }
+        `}
+      </style>
+
+      {/* MODAL DE PRODUCTO (DRAWER) */}
+      {selectedPiece && (
+        <div className="no-print drawer-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelectedPiece(null); }}>
+          <div className="drawer-container">
+            <button onClick={() => setSelectedPiece(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+              <X size={24} color="#374151" />
+            </button>
+            
+            <div className="drawer-content">
+              {/* Image Section */}
+              <div style={{ background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '350px', position: 'relative' }}>
+                {calculatePrice(selectedPiece).isOferta && (
+                  <div className="premium-badge" style={{ top: '20px', left: '20px', right: 'auto' }}>
+                    {calculatePrice(selectedPiece).pct > 0 ? `-${calculatePrice(selectedPiece).pct}% OFERTA` : 'OFERTA ESPECIAL'}
+                  </div>
+                )}
+                {selectedPiece.imagen_url ? (
+                  <img src={getOptimizedUrl(selectedPiece.imagen_url, { width: 600, crop: 'fill' })} alt={selectedPiece.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '30px' }} />
+                ) : (
+                  <div style={{ color: '#D1D5DB' }}><ImageIcon size={80} /></div>
+                )}
+              </div>
+              
+              {/* Details Section */}
+              <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div style={{ fontSize: '14px', color: '#3B82F6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
+                  {selectedPiece.marca || 'GENÉRICO'}
+                </div>
+                <h2 style={{ fontSize: '28px', fontWeight: '800', color: '#0F172A', lineHeight: '1.2', margin: '0 0 16px 0' }}>
+                  {selectedPiece.nombre}
+                </h2>
+                
+                <div style={{ background: '#F1F5F9', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
+                  <div style={{ fontSize: '14px', color: '#64748B', marginBottom: '4px' }}>Compatibilidad:</div>
+                  <div style={{ fontSize: '16px', fontWeight: '600', color: '#334155' }}>
+                    {selectedPiece.modelo_auto} {selectedPiece.anio ? `(${selectedPiece.anio})` : ''}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '15px', color: '#475569', lineHeight: '1.6', marginBottom: '32px', flex: 1 }}>
+                  {selectedPiece.descripcion ? selectedPiece.descripcion.replace(/\[OFERTA:?\d*\]/g, '') : 'Un repuesto de alta calidad garantizado para tu vehículo. Diseñado con las especificaciones originales para asegurar un ajuste y rendimiento óptimo.'}
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: '24px', marginTop: 'auto' }}>
+                  <div>
+                    <div style={{ fontSize: '13px', color: '#64748B', marginBottom: '4px' }}>Precio</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                      <span style={{ fontSize: '32px', fontWeight: '800', color: '#0F172A' }}>
+                        Bs. {calculatePrice(selectedPiece).bob.toFixed(2)}
+                      </span>
+                      {calculatePrice(selectedPiece).originalBob && (
+                        <span style={{ fontSize: '16px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                          Bs. {calculatePrice(selectedPiece).originalBob.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => { addToCart(selectedPiece); setSelectedPiece(null); }}
+                    style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', border: 'none', padding: '16px 32px', borderRadius: '12px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.4)', transition: 'transform 0.2s' }}
+                    onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    <ShoppingCart size={20} /> AÑADIR
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PANEL DEL CARRITO LATERAL */}
       {isCartOpen && (

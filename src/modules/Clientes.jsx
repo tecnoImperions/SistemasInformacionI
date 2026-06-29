@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, Plus, Edit2, X, ChevronUp, Map as MapIcon, BarChart, Database, ChevronDown } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 
 const COUNTRIES = [
   { code: '+591', name: 'Bolivia', flag: '🇧🇴' },
@@ -27,7 +28,7 @@ const COUNTRIES = [
   { code: '+58', name: 'Venezuela', flag: '🇻🇪' },
 ];
 
-export default function Clientes({ addToast }) {
+export default function Clientes({ addToast, userProfile }) {
   const [clientes, setClientes] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCliente, setSelectedCliente] = useState(null);
@@ -50,6 +51,10 @@ export default function Clientes({ addToast }) {
     codigo_pais: '+591',
     telefono_numero: '',
     email: '',
+    empresa: '',
+    direccion: '',
+    latitud: '-17.7833',
+    longitud: '-63.1821',
     estado: true,
     notas_extras: ''
   });
@@ -108,6 +113,10 @@ export default function Clientes({ addToast }) {
         codigo_pais: codigo,
         telefono_numero: numero,
         email: cliente.email || '',
+        empresa: cliente.empresa || '',
+        direccion: cliente.direccion || '',
+        latitud: cliente.latitud || '-17.7833',
+        longitud: cliente.longitud || '-63.1821',
         estado: cliente.estado,
         notas_extras: ''
       });
@@ -118,6 +127,10 @@ export default function Clientes({ addToast }) {
         codigo_pais: '+591',
         telefono_numero: '',
         email: '',
+        empresa: '',
+        direccion: '',
+        latitud: '-17.7833',
+        longitud: '-63.1821',
         estado: true,
         notas_extras: ''
       });
@@ -155,7 +168,11 @@ export default function Clientes({ addToast }) {
         .update({
           nombre: formData.nombre,
           telefono: fullPhone,
-          email: formData.email
+          email: formData.email,
+          empresa: formData.empresa,
+          direccion: formData.direccion,
+          latitud: formData.latitud,
+          longitud: formData.longitud
         })
         .eq('id_cliente', selectedCliente.id_cliente);
         
@@ -173,7 +190,12 @@ export default function Clientes({ addToast }) {
           nombre: formData.nombre,
           telefono: fullPhone,
           email: formData.email,
-          estado: true
+          empresa: formData.empresa,
+          direccion: formData.direccion,
+          latitud: formData.latitud,
+          longitud: formData.longitud,
+          estado: true,
+          usuario_id: userProfile?.id || null // Add user id
         }]);
         
       if (!error) {
@@ -450,6 +472,32 @@ export default function Clientes({ addToast }) {
                   </div>
                 </div>
 
+                <div className="detail-group">
+                  <div className="detail-label">Empresa</div>
+                  <div className="detail-value">
+                    <input 
+                      type="text" 
+                      name="empresa" 
+                      value={formData.empresa} 
+                      onChange={handleFormChange}
+                      placeholder="Ej. CAR B"
+                    />
+                  </div>
+                </div>
+
+                <div className="detail-group">
+                  <div className="detail-label">Dirección</div>
+                  <div className="detail-value">
+                    <input 
+                      type="text" 
+                      name="direccion" 
+                      value={formData.direccion} 
+                      onChange={handleFormChange}
+                      placeholder="Ej. Santa Cruz..."
+                    />
+                  </div>
+                </div>
+
                 <div className="panel-actions">
                   <button className="btn-save" onClick={handleSave}>GUARDAR CAMBIOS</button>
                   <button className="btn-cancel" onClick={closePanel}>CANCELAR</button>
@@ -502,12 +550,58 @@ export default function Clientes({ addToast }) {
 
                 {bottomTab === 'MAPA' && (
                   <>
-                    <div className="section-title">
-                      UBICACIÓN <ChevronUp size={16} />
+                    <div className="section-title" style={{ marginBottom: '16px' }}>
+                      UBICACIÓN LOGÍSTICA <ChevronUp size={16} />
                     </div>
-                    <div style={{ height: '120px', backgroundColor: '#E5E7EB', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#6B7280' }}>
-                      <MapIcon size={24} style={{ marginBottom: '8px' }} />
-                      <span style={{ fontSize: '12px' }}>Mapa no configurado</span>
+                    
+                    <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: '#1E293B', fontWeight: '700', fontSize: '14px' }}>
+                        <MapIcon size={18} color="#3B82F6" /> Coordenadas de Entrega
+                      </div>
+                      
+                      <div style={{ height: '320px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', border: '2px solid #FFF' }}>
+                        <MapContainer 
+                          center={[parseFloat(formData.latitud) || -17.7833, parseFloat(formData.longitud) || -63.1821]} 
+                          zoom={13} 
+                          style={{ height: '100%', width: '100%', zIndex: 1 }}
+                        >
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          />
+                          <Marker position={[parseFloat(formData.latitud) || -17.7833, parseFloat(formData.longitud) || -63.1821]}>
+                            <Popup>
+                              <div style={{ fontWeight: 'bold', color: '#0F172A', marginBottom: '4px' }}>{formData.nombre || 'Nuevo Cliente'}</div>
+                              <div style={{ fontSize: '12px', color: '#475569' }}>{formData.direccion}</div>
+                            </Popup>
+                          </Marker>
+                        </MapContainer>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '20px' }}>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748B', display: 'block', marginBottom: '6px' }}>Latitud</label>
+                          <input 
+                            type="text" 
+                            name="latitud" 
+                            value={formData.latitud} 
+                            onChange={handleFormChange} 
+                            placeholder="-17.7833" 
+                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', outline: 'none', background: '#FFF' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: '#64748B', display: 'block', marginBottom: '6px' }}>Longitud</label>
+                          <input 
+                            type="text" 
+                            name="longitud" 
+                            value={formData.longitud} 
+                            onChange={handleFormChange} 
+                            placeholder="-63.1821" 
+                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #CBD5E1', borderRadius: '8px', outline: 'none', background: '#FFF' }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

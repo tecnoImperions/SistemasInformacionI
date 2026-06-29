@@ -8,13 +8,19 @@ import {
 } from 'lucide-react';
 
 import Clientes from './modules/Clientes';
+import Proveedores from './modules/Proveedores';
 import Contenedores from './modules/Contenedores';
 import Inicio from './modules/Inicio';
 import Catalogo from './modules/Catalogo';
 import Importaciones from './modules/Importaciones';
-import Cotizaciones from './modules/Cotizaciones';
+import NotasEntrega from './modules/NotasEntrega';
 import PaginaWeb from './modules/PaginaWeb';
+import ReportesUsuarios from './modules/ReportesUsuarios';
+import Notificaciones from './modules/Notificaciones';
+import CentroAyuda from './modules/CentroAyuda';
+import PerfilUsuario from './modules/PerfilUsuario';
 import { useStore } from './lib/store';
+import Swal from 'sweetalert2';
 
 // Toast Component
 const ToastContainer = ({ toasts, removeToast }) => {
@@ -215,14 +221,19 @@ function Dashboard({ session }) {
 
   const renderModule = () => {
     switch(activeModule) {
-      case 'CLIENTES': return <Clientes addToast={addToast} />;
-      case 'CONTENEDORES': return <Contenedores addToast={addToast} />;
-      case 'INICIO': return <Inicio addToast={addToast} />;
-      case 'CATALOGO': return <Catalogo addToast={addToast} />;
-      case 'IMPORTACIONES': return <Importaciones addToast={addToast} />;
-      case 'COTIZACIONES': return <Cotizaciones addToast={addToast} />;
-      case 'PAGINA_WEB': return <PaginaWeb onBack={() => setActiveModule('INICIO')} addToast={addToast} />;
-      default: return <Inicio addToast={addToast} />;
+      case 'CLIENTES': return <Clientes addToast={addToast} userProfile={userProfile} />;
+      case 'PROVEEDORES': return <Proveedores addToast={addToast} userProfile={userProfile} />;
+      case 'CONTENEDORES': return <Contenedores addToast={addToast} userProfile={userProfile} />;
+      case 'INICIO': return <Inicio addToast={addToast} userProfile={userProfile} onNavigate={setActiveModule} />;
+      case 'CATALOGO': return <Catalogo addToast={addToast} userProfile={userProfile} />;
+      case 'IMPORTACIONES': return <Importaciones addToast={addToast} userProfile={userProfile} />;
+      case 'NOTAS_ENTREGA': return <NotasEntrega addToast={addToast} userProfile={userProfile} />;
+      case 'REPORTES': return <ReportesUsuarios addToast={addToast} userProfile={userProfile} />;
+      case 'NOTIFICACIONES': return <Notificaciones addToast={addToast} userProfile={userProfile} onBack={() => setActiveModule('INICIO')} />;
+      case 'CENTRO_AYUDA': return <CentroAyuda addToast={addToast} userProfile={userProfile} onBack={() => setActiveModule('INICIO')} />;
+      case 'PERFIL': return <PerfilUsuario addToast={addToast} userProfile={userProfile} onBack={() => setActiveModule('INICIO')} />;
+      case 'PAGINA_WEB': return <PaginaWeb onBack={() => setActiveModule('INICIO')} addToast={addToast} userProfile={userProfile} />;
+      default: return <Inicio addToast={addToast} userProfile={userProfile} onNavigate={setActiveModule} />;
     }
   };
 
@@ -257,6 +268,9 @@ function Dashboard({ session }) {
           <div className={`nav-item ${activeModule === 'CLIENTES' ? 'active' : ''}`} onClick={() => setActiveModule('CLIENTES')}>
             <Users size={18} /> CLIENTES
           </div>
+          <div className={`nav-item ${activeModule === 'PROVEEDORES' ? 'active' : ''}`} onClick={() => setActiveModule('PROVEEDORES')}>
+            <Globe size={18} /> PROVEEDORES
+          </div>
           <div className={`nav-item ${activeModule === 'CONTENEDORES' ? 'active' : ''}`} onClick={() => setActiveModule('CONTENEDORES')}>
             <Shield size={18} /> CONTENEDORES
           </div>
@@ -267,8 +281,11 @@ function Dashboard({ session }) {
             <Globe size={18} /> IMPORTACIONES
           </div>
           <div style={{ padding: '16px 24px 8px', fontSize: '11px', fontWeight: 'bold', color: '#9CA3AF', letterSpacing: '1px' }}>NEGOCIO</div>
-          <div className={`nav-item ${activeModule === 'COTIZACIONES' ? 'active' : ''}`} onClick={() => setActiveModule('COTIZACIONES')}>
-            <FileText size={18} /> COTIZACIONES
+          <div className={`nav-item ${activeModule === 'NOTAS_ENTREGA' ? 'active' : ''}`} onClick={() => setActiveModule('NOTAS_ENTREGA')}>
+            <Briefcase size={18} /> NOTAS DE ENTREGA
+          </div>
+          <div className={`nav-item ${activeModule === 'REPORTES' ? 'active' : ''}`} onClick={() => setActiveModule('REPORTES')}>
+            <BarChart size={18} /> REPORTES INTEGRANTES
           </div>
           <div className="nav-item" onClick={() => window.open(window.location.origin + window.location.pathname + '#/tienda', '_blank')} style={{ color: '#10B981' }}>
             <Store size={18} /> PÁGINA WEB (PÚBLICO)
@@ -284,10 +301,10 @@ function Dashboard({ session }) {
             <button className="header-icon-btn active" onClick={() => setActiveModule('INICIO')}>
               <Home size={18} /> INICIO
             </button>
-            <button className="header-icon-btn">
+            <button className="header-icon-btn" onClick={() => addToast('Búsqueda', 'Búsqueda global próximamente', 'info')}>
               <Search size={18} /> BUSCAR
             </button>
-            <button className="header-icon-btn">
+            <button className="header-icon-btn" onClick={() => addToast('Opciones', 'Configuraciones próximamente', 'info')}>
               <Settings size={18} /> OPCIONES
             </button>
           </div>
@@ -306,15 +323,17 @@ function Dashboard({ session }) {
                 />
               </div>
 
-              <button className="header-icon-btn"><span style={{ fontWeight: 'bold', fontSize: '16px' }}>?</span></button>
-              <button className="header-icon-btn">
+              <button className={`header-icon-btn ${activeModule === 'CENTRO_AYUDA' ? 'active' : ''}`} onClick={() => setActiveModule('CENTRO_AYUDA')} title="Centro de Ayuda">
+                <span style={{ fontWeight: 'bold', fontSize: '16px' }}>?</span>
+              </button>
+              <button className={`header-icon-btn ${activeModule === 'NOTIFICACIONES' ? 'active' : ''}`} onClick={() => setActiveModule('NOTIFICACIONES')} title="Notificaciones">
                 <div style={{ position: 'relative' }}>
                   <Bell size={18} />
                   <span style={{ position: 'absolute', top: -4, right: -4, background: '#EF4444', width: 8, height: 8, borderRadius: '50%' }}></span>
                 </div>
               </button>
             </div>
-            <div className="user-profile">
+            <div className="user-profile" style={{ cursor: 'pointer', border: activeModule === 'PERFIL' ? '1px solid #38BDF8' : '1px solid transparent' }} onClick={() => setActiveModule('PERFIL')} title="Mi Perfil">
               <div className="user-avatar">
                 <Users size={20} />
               </div>
@@ -346,7 +365,23 @@ export default function App() {
 
   // Verificación de vista pública en nueva pestaña
   if (window.location.hash === '#/tienda') {
-    return <PaginaWeb addToast={(title, msg) => alert(`${title}: ${msg}`)} />;
+    return (
+      <div style={{ height: '100vh', width: '100vw', overflowY: 'auto' }}>
+        <PaginaWeb addToast={(title, msg, type) => {
+          Swal.fire({
+            title: title,
+            text: msg,
+            icon: type || 'success',
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            background: '#111827',
+            color: '#fff'
+          });
+        }} />
+      </div>
+    );
   }
 
   useEffect(() => {

@@ -102,7 +102,8 @@ export default function Importaciones({ addToast }) {
         fecha_importacion: formData.fecha_importacion || null,
         costo_total: parseFloat(formData.costo_total),
         estado: formData.estado,
-        id_contenedor: parseInt(formData.id_contenedor)
+        id_contenedor: parseInt(formData.id_contenedor),
+        usuario_id: userProfile?.id || null
       };
 
       const { error } = await supabase
@@ -246,7 +247,37 @@ export default function Importaciones({ addToast }) {
             <div className="detail-group">
               <div className="detail-label">País de Origen *</div>
               <div className="detail-value">
-                <input type="text" name="pais_origen" value={formData.pais_origen} onChange={handleFormChange} placeholder="Ej. China, USA" />
+                <select 
+                  name="pais_origen" 
+                  value={formData.pais_origen} 
+                  onChange={handleFormChange}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #E5E7EB', borderRadius: '4px', fontSize: '13px' }}
+                >
+                  <option value="">Seleccione un país...</option>
+                  <option value="Alemania">Alemania</option>
+                  <option value="Argentina">Argentina</option>
+                  <option value="Bolivia">Bolivia</option>
+                  <option value="Brasil">Brasil</option>
+                  <option value="Canadá">Canadá</option>
+                  <option value="Chile">Chile</option>
+                  <option value="China">China</option>
+                  <option value="Colombia">Colombia</option>
+                  <option value="Corea del Sur">Corea del Sur</option>
+                  <option value="España">España</option>
+                  <option value="Estados Unidos">Estados Unidos</option>
+                  <option value="Francia">Francia</option>
+                  <option value="India">India</option>
+                  <option value="Italia">Italia</option>
+                  <option value="Japón">Japón</option>
+                  <option value="México">México</option>
+                  <option value="Panamá">Panamá</option>
+                  <option value="Paraguay">Paraguay</option>
+                  <option value="Perú">Perú</option>
+                  <option value="Reino Unido">Reino Unido</option>
+                  <option value="Taiwán">Taiwán</option>
+                  <option value="Uruguay">Uruguay</option>
+                  <option value="Otro">Otro</option>
+                </select>
               </div>
             </div>
 

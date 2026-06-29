@@ -154,12 +154,16 @@ export default function Cotizaciones({ addToast }) {
     try {
       // 1. Insert Cotizacion
       const total = calcularTotal();
+      const numCot = `COT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const { data: cotData, error: cotError } = await supabase
         .from('cotizaciones')
         .insert([{
+          numero_cotizacion: numCot,
           id_cliente: selectedCliente.id_cliente,
           fecha: formData.fecha,
           total: total,
+          estado: 'PENDIENTE',
+          usuario_id: userProfile?.id || null
           observaciones: formData.observaciones ? `${formData.observaciones}\n(TC aplicado: ${tipoCambio} Bs/$)` : `(TC aplicado: ${tipoCambio} Bs/$)`
         }])
         .select()
@@ -261,6 +265,7 @@ export default function Cotizaciones({ addToast }) {
                   <th>CLIENTE</th>
                   <th>FECHA</th>
                   <th>TOTAL (Bs.)</th>
+                  <th>ESTADO</th>
                   <th>ACCIONES</th>
                 </tr>
               </thead>
@@ -272,7 +277,7 @@ export default function Cotizaciones({ addToast }) {
                 ) : (
                   filteredCotizaciones.map((cot) => (
                     <tr key={cot.id_cotizacion}>
-                      <td style={{ fontWeight: '600' }}>COT-{cot.id_cotizacion.toString().padStart(4, '0')}</td>
+                      <td style={{ fontWeight: '600' }}>{cot.numero_cotizacion || `COT-${cot.id_cotizacion.toString().padStart(4, '0')}`}</td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <User size={14} color="#6B7280" /> {cot.clientes?.nombre || 'Desconocido'}
@@ -285,6 +290,18 @@ export default function Cotizaciones({ addToast }) {
                       </td>
                       <td style={{ fontWeight: '700', color: '#134B82' }}>
                         Bs. {parseFloat(cot.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td>
+                        <span style={{ 
+                          padding: '4px 8px', 
+                          borderRadius: '4px', 
+                          fontSize: '11px', 
+                          fontWeight: 'bold',
+                          background: cot.estado === 'FACTURADA' ? '#D1FAE5' : cot.estado === 'RECHAZADA' ? '#FEE2E2' : '#FEF3C7',
+                          color: cot.estado === 'FACTURADA' ? '#065F46' : cot.estado === 'RECHAZADA' ? '#991B1B' : '#92400E'
+                        }}>
+                          {cot.estado || 'PENDIENTE'}
+                        </span>
                       </td>
                       <td>
                         <button className="btn-action" style={{ background: '#F3F4F6', color: '#374151' }} onClick={() => handlePrintRequest(cot)}>
@@ -460,7 +477,7 @@ export default function Cotizaciones({ addToast }) {
             </div>
             <div style={{ textAlign: 'right' }}>
               <h2 style={{ fontSize: '24px', color: '#374151', textTransform: 'uppercase', marginBottom: '8px' }}>Cotización</h2>
-              <div style={{ fontSize: '14px', fontWeight: '600' }}>Nro: COT-{printData.id_cotizacion.toString().padStart(4, '0')}</div>
+              <div style={{ fontSize: '14px', fontWeight: '600' }}>Nro: {printData.numero_cotizacion || `COT-${printData.id_cotizacion.toString().padStart(4, '0')}`}</div>
               <div style={{ fontSize: '14px' }}>Fecha: {printData.fecha}</div>
             </div>
           </div>
