@@ -370,7 +370,17 @@ export default function Catalogo({ addToast }) {
           fetchData();
         } catch (err) {
           console.error(err);
-          if (addToast) addToast('Error', 'No se pudo eliminar la pieza', 'error');
+          // 23503 is postgres code for foreign_key_violation
+          if (err.code === '23503' || err.message?.includes('foreign key')) {
+            Swal.fire({
+              title: 'No se puede eliminar',
+              text: 'Esta pieza ya ha sido utilizada en transacciones (cotizaciones o notas de entrega) previas. Para mantener el historial de la empresa, te recomendamos editarla y desmarcar la opción "Disponible" en su lugar.',
+              icon: 'warning',
+              confirmButtonColor: '#3B82F6'
+            });
+          } else {
+            if (addToast) addToast('Error', 'No se pudo eliminar la pieza. Detalle: ' + err.message, 'error');
+          }
         }
       }
     });

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
 import { Search, Plus, X, Printer, FileText, Trash2, User, Calendar, Truck, MapPin, Phone, Mail } from 'lucide-react';
+import logoImg from '../../public/logo.png';
 
-export default function NotasEntrega({ addToast }) {
+export default function NotasEntrega({ addToast, userProfile }) {
   const { tipoCambio } = useStore();
   const [notas, setNotas] = useState([]);
   const [search, setSearch] = useState('');
@@ -224,8 +225,7 @@ export default function NotasEntrega({ addToast }) {
           total_usd: totales.totalUsd,
           total_bs: totales.totalBs,
           observaciones: formData.observaciones,
-          estado: 'EMITIDA',
-          usuario_id: userProfile?.id || null
+          estado: 'EMITIDA'
         }])
         .select()
         .single();
@@ -233,15 +233,16 @@ export default function NotasEntrega({ addToast }) {
       if (notaError) throw notaError;
 
       // 2. Insert Detalles
+      const parseNumHelper = (val) => parseFloat(String(val || '0').replace(',', '.')) || 0;
       const detallesAInsertar = detalles.map(d => ({
         id_nota: notaData.id_nota,
         id_proveedor: d.id_proveedor,
-        numero_factura: d.numero_factura,
-        valor_factura: d.valor_factura,
-        flete: d.flete,
-        cantidad_bultos: d.cantidad_bultos,
-        peso_kg: d.peso_kg,
-        total_liquidacion: d.total_liquidacion
+        numero_factura: d.numero_factura || 'S/N',
+        valor_factura: parseNumHelper(d.valor_factura),
+        flete: parseNumHelper(d.flete),
+        cantidad_bultos: parseInt(d.cantidad_bultos) || 0,
+        peso_kg: parseNumHelper(d.peso_kg),
+        total_liquidacion: parseNumHelper(d.total_liquidacion)
       }));
 
       const { error: detError } = await supabase
@@ -261,7 +262,7 @@ export default function NotasEntrega({ addToast }) {
 
   const handleActionRequest = async (nota, action) => {
     if (action === 'whatsapp') {
-      const msg = `Hola ${nota.clientes?.nombre || ''}, te enviamos tu Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toLocaleString('es-BO', { minimumFractionDigits: 2 })}.`;
+      const msg = `Hola ${nota.clientes?.nombre || ''}, te enviamos tu Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toFixed(2)}.`;
       let phone = nota.clientes?.telefono || '';
       phone = phone.replace(/[^0-9]/g, '');
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -270,7 +271,7 @@ export default function NotasEntrega({ addToast }) {
     
     if (action === 'email') {
       const subject = `Nota de Entrega N° ${nota.numero_nota} - IPCB IMPORT`;
-      const body = `Hola ${nota.clientes?.nombre || ''},\n\nAdjunto enviamos su Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toLocaleString('es-BO', { minimumFractionDigits: 2 })}.\n\nGracias por confiar en IPCB IMPORT.`;
+      const body = `Hola ${nota.clientes?.nombre || ''},\n\nAdjunto enviamos su Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toFixed(2)}.\n\nGracias por confiar en IPCB IMPORT.`;
       window.location.href = `mailto:${nota.clientes?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       return;
     }
@@ -599,7 +600,7 @@ export default function NotasEntrega({ addToast }) {
           }}>
           {/* Watermark */}
           <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: 0.05, pointerEvents: 'none', zIndex: 0 }}>
-            <img src="/logo.png" alt="Watermark" style={{ width: '600px' }} />
+            <img src={logoImg} alt="Watermark" style={{ width: '600px' }} />
           </div>
 
           <style>
@@ -621,7 +622,7 @@ export default function NotasEntrega({ addToast }) {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '25px' }}>
             <div style={{ width: '320px', color: '#000' }}>
-              <img src="/logo.png" alt="IPCB Logo" style={{ width: '250px', marginBottom: '10px' }} />
+              <img src={logoImg} alt="IPCB Logo" style={{ width: '250px', marginBottom: '10px' }} />
               <div style={{ marginTop: '12px', fontSize: '10px', lineHeight: '1.5', paddingLeft: '5px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start' }}>
                   <MapPin size={12} style={{ marginTop: '2px', marginRight: '5px', flexShrink: 0 }}/>
@@ -689,13 +690,13 @@ export default function NotasEntrega({ addToast }) {
                   <tr key={i}>
                     <td style={{ border: '1px solid #000', borderLeft: '2px solid #000', borderRight: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{d.proveedores?.nombre?.toUpperCase()}</td>
                     <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{d.numero_factura}</td>
-                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.valor_factura || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.flete || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.valor_factura || 0).toFixed(2)}</td>
+                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.flete || 0).toFixed(2)}</td>
                     <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{d.cantidad_bultos}</td>
-                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.peso_kg || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ border: '1px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px' }}>{parseFloat(d.peso_kg || 0).toFixed(2)}</td>
                     <td style={{ border: '1px solid #000', borderRight: '2px solid #000', borderBottom: isLastDataRow ? '2px solid #000' : '1px solid #000', padding: '6px', display: 'flex', justifyContent: 'space-between' }}>
                       <span>$b</span>
-                      <span>{parseFloat(d.total_liquidacion || 0).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</span>
+                      <span>{parseFloat(d.total_liquidacion || 0).toFixed(2)}</span>
                     </td>
                   </tr>
                 );
@@ -718,10 +719,10 @@ export default function NotasEntrega({ addToast }) {
                 <td colSpan="2" style={{ border: 'none' }}></td>
                 <td colSpan="2" style={{ border: '2px solid #000', borderTop: 'none', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>TOTALES</td>
                 <td style={{ border: '2px solid #000', borderTop: 'none', padding: '6px', fontWeight: 'bold', fontSize: '13px' }}>{printData.total_bultos}</td>
-                <td style={{ border: '2px solid #000', borderTop: 'none', padding: '6px', fontWeight: 'bold', fontSize: '13px' }}>{parseFloat(printData.total_peso_kg).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</td>
+                <td style={{ border: '2px solid #000', borderTop: 'none', padding: '6px', fontWeight: 'bold', fontSize: '13px' }}>{parseFloat(printData.total_peso_kg).toFixed(2)}</td>
                 <td style={{ border: '2px solid #000', borderTop: 'none', padding: '8px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
                   <span>$b</span>
-                  <span>{parseFloat(printData.total_usd).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</span>
+                  <span>{parseFloat(printData.total_usd).toFixed(2)}</span>
                 </td>
               </tr>
             </tfoot>
@@ -737,7 +738,7 @@ export default function NotasEntrega({ addToast }) {
                 </tr>
                 <tr>
                   <td style={{ textAlign: 'right', paddingRight: '25px', color: '#00B050' }}>BS.</td>
-                  <td style={{ textAlign: 'right', color: '#00B050', fontSize: '15px' }}>{parseFloat(printData.total_bs).toLocaleString('es-BO', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ textAlign: 'right', color: '#00B050', fontSize: '15px' }}>{parseFloat(printData.total_bs).toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>

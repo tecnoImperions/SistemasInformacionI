@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import './index.css';
 import { 
@@ -15,6 +15,7 @@ import Catalogo from './modules/Catalogo';
 import Importaciones from './modules/Importaciones';
 import NotasEntrega from './modules/NotasEntrega';
 import PaginaWeb from './modules/PaginaWeb';
+import logoEmpresa from '../public/logo.png';
 import ReportesUsuarios from './modules/ReportesUsuarios';
 import Notificaciones from './modules/Notificaciones';
 import CentroAyuda from './modules/CentroAyuda';
@@ -192,6 +193,49 @@ function Dashboard({ session }) {
     }, 300);
   };
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const optionsRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) setIsSearchOpen(false);
+      if (optionsRef.current && !optionsRef.current.contains(event.target)) setIsOptionsOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const delayDebounceFn = setTimeout(async () => {
+      const q = `%${searchQuery}%`;
+      const [clientes, piezas, notas] = await Promise.all([
+        supabase.from('clientes').select('id_cliente, nombre').ilike('nombre', q).limit(3),
+        supabase.from('catalogo_piezas').select('id_pieza, nombre, marca').ilike('nombre', q).limit(3),
+        supabase.from('notas_entrega').select('numero_nota, estado').ilike('numero_nota', q).limit(3)
+      ]);
+      setSearchResults({
+        clientes: clientes.data || [],
+        piezas: piezas.data || [],
+        notas: notas.data || []
+      });
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
+  const handleSearchResultClick = (moduleName) => {
+    setActiveModule(moduleName);
+    setIsSearchOpen(false);
+    setSearchQuery('');
+  };
+
   useEffect(() => {
     fetchUserProfile();
   }, []);
@@ -254,7 +298,7 @@ function Dashboard({ session }) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <Globe size={28} color="#ffffff" />
+            <img src={logoEmpresa} alt="Logo Empresa" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
             <div className="sidebar-logo-text">
               <span className="sidebar-logo-title">IPCB</span>
               <span className="sidebar-logo-subtitle">Import Central Logistics System</span>
@@ -297,16 +341,97 @@ function Dashboard({ session }) {
       <main className="main-wrapper">
         {/* Top Header */}
         <header className="top-header">
-          <div className="header-nav">
-            <button className="header-icon-btn active" onClick={() => setActiveModule('INICIO')}>
+          <div className="header-nav" style={{ position: 'relative' }}>
+            <button className={`header-icon-btn ${activeModule === 'INICIO' ? 'active' : ''}`} onClick={() => setActiveModule('INICIO')}>
               <Home size={18} /> INICIO
             </button>
-            <button className="header-icon-btn" onClick={() => addToast('Búsqueda', 'Búsqueda global próximamente', 'info')}>
-              <Search size={18} /> BUSCAR
-            </button>
-            <button className="header-icon-btn" onClick={() => addToast('Opciones', 'Configuraciones próximamente', 'info')}>
-              <Settings size={18} /> OPCIONES
-            </button>
+            
+            {/* Global Search */}
+            <div ref={searchRef} style={{ position: 'relative', display: 'inline-block' }}>
+              <button className={`header-icon-btn ${isSearchOpen ? 'active' : ''}`} onClick={() => setIsSearchOpen(!isSearchOpen)}>
+                <Search size={18} /> BUSCAR
+              </button>
+              
+              {isSearchOpen && (
+                <div style={{ position: 'absolute', top: '110%', left: 0, width: '320px', background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', padding: '12px', zIndex: 50, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Buscar clientes, piezas, notas..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', background: '#0F172A', border: '1px solid #334155', borderRadius: '4px', color: '#FFF', outline: 'none', marginBottom: '8px', fontSize: '13px' }}
+                  />
+                  
+                  {searchQuery && !searchResults && (
+                    <div style={{ fontSize: '12px', color: '#94A3B8', textAlign: 'center', padding: '10px' }}>Buscando...</div>
+                  )}
+                  
+                  {searchResults && (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                      {searchResults.clientes.length > 0 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Clientes</div>
+                          {searchResults.clientes.map(c => (
+                            <div key={c.id_cliente} onClick={() => handleSearchResultClick('CLIENTES')} style={{ padding: '6px 8px', fontSize: '13px', color: '#E2E8F0', cursor: 'pointer', borderRadius: '4px' }} className="search-result-item">
+                              <Users size={12} style={{ display: 'inline', marginRight: '6px' }}/> {c.nombre}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.piezas.length > 0 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Catálogo de Piezas</div>
+                          {searchResults.piezas.map(p => (
+                            <div key={p.id_pieza} onClick={() => handleSearchResultClick('CATALOGO')} style={{ padding: '6px 8px', fontSize: '13px', color: '#E2E8F0', cursor: 'pointer', borderRadius: '4px' }} className="search-result-item">
+                              <Briefcase size={12} style={{ display: 'inline', marginRight: '6px' }}/> {p.nombre} {p.marca ? `(${p.marca})` : ''}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.notas.length > 0 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Notas de Entrega</div>
+                          {searchResults.notas.map(n => (
+                            <div key={n.numero_nota} onClick={() => handleSearchResultClick('NOTAS_ENTREGA')} style={{ padding: '6px 8px', fontSize: '13px', color: '#E2E8F0', cursor: 'pointer', borderRadius: '4px' }} className="search-result-item">
+                              <FileText size={12} style={{ display: 'inline', marginRight: '6px' }}/> N° {n.numero_nota}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {searchResults.clientes.length === 0 && searchResults.piezas.length === 0 && searchResults.notas.length === 0 && (
+                         <div style={{ fontSize: '12px', color: '#94A3B8', textAlign: 'center', padding: '10px' }}>No se encontraron coincidencias.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Options Menu */}
+            <div ref={optionsRef} style={{ position: 'relative', display: 'inline-block' }}>
+              <button className={`header-icon-btn ${isOptionsOpen ? 'active' : ''}`} onClick={() => setIsOptionsOpen(!isOptionsOpen)}>
+                <Settings size={18} /> OPCIONES
+              </button>
+              
+              {isOptionsOpen && (
+                <div style={{ position: 'absolute', top: '110%', left: 0, width: '200px', background: '#1E293B', border: '1px solid #334155', borderRadius: '8px', padding: '8px', zIndex: 50, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
+                  <div className="search-result-item" onClick={() => { setActiveModule('PERFIL'); setIsOptionsOpen(false); }} style={{ padding: '8px', cursor: 'pointer', color: '#E2E8F0', fontSize: '13px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+                    <Users size={14} style={{ marginRight: '8px' }} /> Mi Perfil
+                  </div>
+                  <div className="search-result-item" onClick={() => { setActiveModule('CENTRO_AYUDA'); setIsOptionsOpen(false); }} style={{ padding: '8px', cursor: 'pointer', color: '#E2E8F0', fontSize: '13px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+                    <Info size={14} style={{ marginRight: '8px' }} /> Centro de Ayuda
+                  </div>
+                  <div style={{ height: '1px', background: '#334155', margin: '4px 0' }}></div>
+                  <div className="search-result-item" onClick={() => { handleLogout(); setIsOptionsOpen(false); }} style={{ padding: '8px', cursor: 'pointer', color: '#EF4444', fontSize: '13px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}>
+                    <LogOut size={14} style={{ marginRight: '8px' }} /> Cerrar Sesión
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="header-right">
