@@ -170,9 +170,7 @@ export default function Clientes({ addToast, userProfile }) {
           telefono: fullPhone,
           email: formData.email,
           empresa: formData.empresa,
-          direccion: formData.direccion,
-          latitud: formData.latitud,
-          longitud: formData.longitud
+          direccion: formData.direccion
         })
         .eq('id_cliente', selectedCliente.id_cliente);
         
@@ -192,10 +190,7 @@ export default function Clientes({ addToast, userProfile }) {
           email: formData.email,
           empresa: formData.empresa,
           direccion: formData.direccion,
-          latitud: formData.latitud,
-          longitud: formData.longitud,
-          estado: true,
-          usuario_id: userProfile?.id || null // Add user id
+          estado: true
         }]);
         
       if (!error) {

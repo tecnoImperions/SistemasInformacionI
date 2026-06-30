@@ -102,8 +102,7 @@ export default function Importaciones({ addToast }) {
         fecha_importacion: formData.fecha_importacion || null,
         costo_total: parseFloat(formData.costo_total),
         estado: formData.estado,
-        id_contenedor: parseInt(formData.id_contenedor),
-        usuario_id: userProfile?.id || null
+        id_contenedor: parseInt(formData.id_contenedor)
       };
 
       const { error } = await supabase

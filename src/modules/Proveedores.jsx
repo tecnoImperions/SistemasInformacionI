@@ -168,8 +168,7 @@ export default function Proveedores({ addToast }) {
           telefono: fullPhone,
           email: formData.email,
           pais: formData.pais,
-          estado: true,
-          usuario_id: userProfile?.id || null
+          estado: true
         }]);
         
       if (!error) {

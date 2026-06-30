@@ -163,7 +163,6 @@ export default function Cotizaciones({ addToast }) {
           fecha: formData.fecha,
           total: total,
           estado: 'PENDIENTE',
-          usuario_id: userProfile?.id || null
           observaciones: formData.observaciones ? `${formData.observaciones}\n(TC aplicado: ${tipoCambio} Bs/$)` : `(TC aplicado: ${tipoCambio} Bs/$)`
         }])
         .select()

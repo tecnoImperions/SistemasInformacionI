@@ -220,7 +220,7 @@ export default function Catalogo({ addToast }) {
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
-      const { data, error } = await supabase.from('categorias').insert([{ nombre: newCategoryName.trim(), usuario_id: userProfile?.id || null }]).select().single();
+      const { data, error } = await supabase.from('categorias').insert([{ nombre: newCategoryName.trim() }]).select().single();
       if (error) throw error;
       setCategorias([...categorias, data]);
       setFormData(prev => ({ ...prev, id_categoria: data.id_categoria }));
@@ -268,8 +268,7 @@ export default function Catalogo({ addToast }) {
         precio_referencial: formData.precio_referencial ? parseFloat(formData.precio_referencial) : null,
         id_categoria: formData.id_categoria,
         imagen_url: publicId,
-        disponible: formData.disponible,
-        usuario_id: userProfile?.id || null
+        disponible: formData.disponible
       };
 
       if (selectedPieza) {
