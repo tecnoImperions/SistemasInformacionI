@@ -143,15 +143,44 @@ export default function Contenedores({ addToast, userProfile }) {
     if (!formData.codigo_serial.trim()) return addToast('Error', 'El código serial es obligatorio.', 'error');
     const payload = { ...formData, id_usuario: userProfile?.id || null };
     
+    const syncAduanasImportacion = async (contId) => {
+      if (formData.estado_distribucion === 'En Aduana') {
+        const { data: exist } = await supabase.from('importaciones').select('id_importacion').eq('id_contenedor', contId);
+        if (!exist || exist.length === 0) {
+          const { data: det } = await supabase.from('contenedor_detalles').select('precio_venta, cantidad').eq('id_contenedor', contId);
+          let sumM = 0;
+          if (det) det.forEach(d => sumM += (parseFloat(d.precio_venta || 0) * parseInt(d.cantidad || 0)));
+          const totalEst = sumM + parseFloat(formData.costo_flete_total || 0);
+          
+          let autoP = 'Otro';
+          if (formData.puerto_origen) {
+            const pMap = { 'China': 'China', 'Brasil': 'Brasil', 'Estados': 'Estados Unidos', 'Argentina': 'Argentina', 'Perú': 'Perú', 'Peru': 'Perú', 'Corea': 'Corea del Sur', 'Japón': 'Japón', 'Japon': 'Japón' };
+            Object.keys(pMap).forEach(k => { if (formData.puerto_origen.includes(k)) autoP = pMap[k]; });
+          }
+          
+          await supabase.from('importaciones').insert([{
+            id_contenedor: contId,
+            pais_origen: autoP,
+            fecha_importacion: new Date().toISOString().split('T')[0],
+            costo_total: totalEst > 0 ? totalEst.toFixed(2) : 0,
+            estado: 'En Aduana'
+          }]);
+          addToast('🏛️ Aduanas', 'Se generó automáticamente el expediente en Importaciones.', 'info');
+        }
+      }
+    };
+    
     if (selectedContenedor) {
       const { error } = await supabase.from('contenedores').update(payload).eq('id_contenedor', selectedContenedor.id_contenedor);
       if (!error) {
+        await syncAduanasImportacion(selectedContenedor.id_contenedor);
         fetchContenedores(); addToast('Éxito', 'Contenedor actualizado.', 'success');
       } else addToast('Error', 'No se pudo actualizar.', 'error');
     } else {
       payload.id_usuario = userProfile?.id || null;
       const { data, error } = await supabase.from('contenedores').insert([payload]).select().single();
       if (!error && data) {
+        await syncAduanasImportacion(data.id_contenedor);
         fetchContenedores(); openPanel(data); addToast('Éxito', 'Contenedor registrado.', 'success');
       } else addToast('Error', 'No se pudo registrar.', 'error');
     }
@@ -173,7 +202,9 @@ export default function Contenedores({ addToast, userProfile }) {
     if (!error) {
       addToast('Éxito', 'Carga añadida.', 'success');
       setCarga([...carga, data]);
-      setFormCarga({ id_pieza: '', id_cliente: '', id_proveedor: '', cantidad: 1, costo_compra: 0, precio_venta: 0, numero_factura: '' });
+      // Reset only piece details, preserve supplier, client and invoice for faster batch entry
+      setFormCarga(prev => ({ ...prev, id_pieza: '', cantidad: 1, costo_compra: 0, precio_venta: 0 }));
+      setPiezaSearch('');
     } else addToast('Error', 'Fallo al añadir carga. Verifica si ya aplicaste el script SQL.', 'error');
   };
 
@@ -204,18 +235,17 @@ export default function Contenedores({ addToast, userProfile }) {
     const clienteId = clienteObj?.id_cliente || '';
     const clienteNombre = clienteObj?.nombre || '';
     
-    setFormCarga({
-      ...formCarga,
+    setFormCarga(prev => ({
+      ...prev,
       id_pieza: item.id_pieza,
-      id_cliente: clienteId,
+      id_cliente: clienteId || prev.id_cliente,
       cantidad: item.cantidad,
       costo_compra: 0,
-      precio_venta: parseFloat(item.precio_unitario) || 0,
-      numero_factura: ''
-    });
+      precio_venta: parseFloat(item.precio_unitario) || 0
+    }));
     setPiezaSearch(item.catalogo_piezas?.nombre || '');
-    setClienteSearch(clienteNombre);
-    if (addToast) addToast('Info', 'Formulario autocompletado. Selecciona un proveedor y guárdalo.', 'info');
+    if (clienteNombre) setClienteSearch(clienteNombre);
+    if (addToast) addToast('Info', 'Repuesto autocompletado. Proveedor y Factura conservados.', 'info');
   };
 
   const handleAddRuta = async () => {
@@ -504,6 +534,16 @@ export default function Contenedores({ addToast, userProfile }) {
                 <div style={{ marginTop: '16px' }}>
                   <button className="btn-save" onClick={handleSaveInfo} style={{ width: '100%' }}><Save size={16} style={{marginRight:'8px'}}/> GUARDAR INFO BASE</button>
                 </div>
+                {formData.estado_distribucion === 'En Aduana' && (
+                  <div style={{ marginTop: '16px', background: '#FEF3C7', border: '1px solid #F59E0B', padding: '12px', borderRadius: '8px', color: '#92400E' }}>
+                    <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <span>🏛️ Conectividad con Aduanas</span>
+                    </div>
+                    <p style={{ margin: '0', fontSize: '12px' }}>
+                      Al poner el estado en <strong>"En Aduana"</strong>, ve al módulo de <strong>Importaciones</strong> y selecciona este contenedor: el sistema conectará los datos automáticamente y calculará la póliza aduanera.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

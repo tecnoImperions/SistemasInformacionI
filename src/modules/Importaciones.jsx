@@ -85,8 +85,52 @@ export default function Importaciones({ addToast }) {
     setIsPanelOpen(false);
   };
 
-  const handleFormChange = (e) => {
+  const handleFormChange = async (e) => {
     const { name, value } = e.target;
+    if (name === 'id_contenedor' && value) {
+      const cont = contenedores.find(c => c.id_contenedor.toString() === value);
+      let autoPais = formData.pais_origen;
+      if (cont && cont.puerto_origen) {
+        const paisMap = {
+          'China': 'China',
+          'Brasil': 'Brasil',
+          'Estados': 'Estados Unidos',
+          'Argentina': 'Argentina',
+          'Perú': 'Perú',
+          'Peru': 'Perú',
+          'Corea': 'Corea del Sur',
+          'Japón': 'Japón',
+          'Japon': 'Japón'
+        };
+        Object.keys(paisMap).forEach(key => {
+          if (cont.puerto_origen.includes(key)) autoPais = paisMap[key];
+        });
+      }
+      
+      // Calculate estimated cost from container cargo + flete
+      const { data: detalles } = await supabase
+        .from('contenedor_detalles')
+        .select('costo_compra, precio_venta, cantidad')
+        .eq('id_contenedor', value);
+        
+      let sumMercancia = 0;
+      if (detalles) {
+        detalles.forEach(d => {
+          sumMercancia += (parseFloat(d.precio_venta || 0) * parseInt(d.cantidad || 0));
+        });
+      }
+      const totalEstimated = sumMercancia + (parseFloat(cont?.costo_flete_total || 0));
+      
+      setFormData(prev => ({ 
+        ...prev, 
+        id_contenedor: value,
+        pais_origen: autoPais || prev.pais_origen,
+        costo_total: totalEstimated > 0 ? totalEstimated.toFixed(2) : prev.costo_total,
+        estado: 'En Aduana'
+      }));
+      if (addToast) addToast('⚡ Autocompletado', `Datos importados del contenedor ${cont?.codigo_serial}. Estado cambiado a En Aduana.`, 'info');
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -117,6 +161,58 @@ export default function Importaciones({ addToast }) {
     } catch (err) {
       console.error(err);
       if (addToast) addToast('Error', 'No se pudo guardar la importación', 'error');
+    }
+  };
+
+  const handleSyncAduanas = async () => {
+    setLoading(true);
+    try {
+      const { data: conts } = await supabase.from('contenedores').select('*').eq('estado_distribucion', 'En Aduana');
+      if (!conts || conts.length === 0) {
+        if (addToast) addToast('Info', 'No hay contenedores en estado "En Aduana".', 'info');
+        setLoading(false);
+        return;
+      }
+
+      const { data: exImps } = await supabase.from('importaciones').select('id_contenedor');
+      const exIds = new Set(exImps?.map(i => i.id_contenedor?.toString()) || []);
+
+      let createdCount = 0;
+      for (const c of conts) {
+        if (!exIds.has(c.id_contenedor?.toString())) {
+          const { data: det } = await supabase.from('contenedor_detalles').select('precio_venta, cantidad').eq('id_contenedor', c.id_contenedor);
+          let sumM = 0;
+          if (det) det.forEach(d => sumM += (parseFloat(d.precio_venta || 0) * parseInt(d.cantidad || 0)));
+          const totalEst = sumM + parseFloat(c.costo_flete_total || 0);
+
+          let autoP = 'Otro';
+          if (c.puerto_origen) {
+            const pMap = { 'China': 'China', 'Brasil': 'Brasil', 'Estados': 'Estados Unidos', 'Argentina': 'Argentina', 'Perú': 'Perú', 'Peru': 'Perú', 'Corea': 'Corea del Sur', 'Japón': 'Japón', 'Japon': 'Japón' };
+            Object.keys(pMap).forEach(k => { if (c.puerto_origen.includes(k)) autoP = pMap[k]; });
+          }
+
+          await supabase.from('importaciones').insert([{
+            id_contenedor: c.id_contenedor,
+            pais_origen: autoP,
+            fecha_importacion: new Date().toISOString().split('T')[0],
+            costo_total: totalEst > 0 ? totalEst.toFixed(2) : 0,
+            estado: 'En Aduana'
+          }]);
+          createdCount++;
+        }
+      }
+
+      fetchData();
+      if (createdCount > 0) {
+        if (addToast) addToast('⚡ Éxito', `Se importaron ${createdCount} contenedores nuevos a Aduanas.`, 'success');
+      } else {
+        if (addToast) addToast('Info', 'Todos los contenedores "En Aduana" ya están sincronizados aquí.', 'info');
+      }
+    } catch (err) {
+      console.error(err);
+      if (addToast) addToast('Error', 'Fallo al sincronizar con aduanas.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -153,6 +249,25 @@ export default function Importaciones({ addToast }) {
           </div>
 
           <div style={{ flex: 1 }}></div>
+
+          <button 
+            onClick={handleSyncAduanas}
+            style={{ 
+              background: '#FEF3C7', 
+              color: '#92400E', 
+              border: '1px solid #F59E0B', 
+              padding: '8px 14px', 
+              borderRadius: '6px', 
+              fontWeight: 'bold', 
+              fontSize: '13px', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px' 
+            }}
+          >
+            ⚡ SINCRONIZAR ADUANAS
+          </button>
 
           <button className="btn-primary" onClick={() => openPanel()}>
             <Plus size={18} /> REGISTRAR IMPORTACIÓN
@@ -240,6 +355,9 @@ export default function Importaciones({ addToast }) {
                     <option key={c.id_contenedor} value={c.id_contenedor}>{c.codigo_serial} ({c.estado_distribucion || 'Sin estado'})</option>
                   ))}
                 </select>
+                <small style={{ color: '#0369A1', display: 'block', marginTop: '6px', fontSize: '11px', background: '#E0F2FE', padding: '6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>
+                  ⚡ <strong>Conectividad Automática:</strong> Al elegir un contenedor se autocompletará el País de Origen, se sumará el Costo Total (Mercancía + Flete) y pasará el Estado a <em>"En Aduana"</em>.
+                </small>
               </div>
             </div>
 
