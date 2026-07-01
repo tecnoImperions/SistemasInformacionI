@@ -78,23 +78,21 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
         let totalActividad = 0;
 
         for (const u of users) {
-          const [clientes, prov, cot, imp, notas] = await Promise.all([
-            supabase.from('clientes').select('id_cliente', { count: 'exact', head: true }).eq('usuario_id', u.id),
-            supabase.from('proveedores').select('id_proveedor', { count: 'exact', head: true }).eq('usuario_id', u.id),
-            supabase.from('cotizaciones').select('id_cotizacion', { count: 'exact', head: true }).eq('usuario_id', u.id),
-            supabase.from('importaciones').select('id_importacion', { count: 'exact', head: true }).eq('usuario_id', u.id),
-            supabase.from('notas_entrega').select('id_nota', { count: 'exact', head: true }).eq('usuario_id', u.id)
+          const [cont, cot, kardex, notas] = await Promise.all([
+            supabase.from('contenedores').select('id_contenedor', { count: 'exact', head: true }).eq('id_usuario', u.id),
+            supabase.from('cotizaciones').select('id_cotizacion', { count: 'exact', head: true }).eq('id_usuario', u.id),
+            supabase.from('kardex_inventario').select('id_kardex', { count: 'exact', head: true }).eq('id_usuario', u.id),
+            supabase.from('notas_entrega').select('id_nota', { count: 'exact', head: true }).eq('id_usuario', u.id)
           ]);
           
-          const userTotal = (clientes.count||0) + (prov.count||0) + (cot.count||0) + (imp.count||0) + (notas.count||0);
+          const userTotal = (cont.count||0) + (cot.count||0) + (kardex.count||0) + (notas.count||0);
           totalActividad += userTotal;
           
           results.push({
             usuario: u.nombre,
-            clientes: clientes.count || 0,
-            proveedores: prov.count || 0,
+            contenedores: cont.count || 0,
             cotizaciones: cot.count || 0,
-            importaciones: imp.count || 0,
+            movimientos_kardex: kardex.count || 0,
             notas: notas.count || 0,
             total: userTotal
           });
@@ -147,14 +145,14 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
       }
       else if (reportType === 'conversion') {
         const [cotData, notasData] = await Promise.all([
-          supabase.from('cotizaciones').select('id_cotizacion, total_usd').gte('fecha', fechaInicio).lte('fecha', fechaFin),
+          supabase.from('cotizaciones').select('id_cotizacion, total').gte('fecha', fechaInicio).lte('fecha', fechaFin),
           supabase.from('notas_entrega').select('id_nota, total_usd').gte('fecha', fechaInicio).lte('fecha', fechaFin).eq('estado', 'EMITIDA')
         ]);
         
         const cotCount = cotData.data ? cotData.data.length : 0;
         const notasCount = notasData.data ? notasData.data.length : 0;
         
-        const cotValue = cotData.data ? cotData.data.reduce((sum, item) => sum + parseFloat(item.total_usd || 0), 0) : 0;
+        const cotValue = cotData.data ? cotData.data.reduce((sum, item) => sum + parseFloat(item.total || 0), 0) : 0;
         const notasValue = notasData.data ? notasData.data.reduce((sum, item) => sum + parseFloat(item.total_usd || 0), 0) : 0;
 
         const conversionRate = cotCount > 0 ? ((notasCount / cotCount) * 100).toFixed(1) : 0;
@@ -169,6 +167,44 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
         }]);
         setSummary({ cotCount, notasCount, conversionRate });
         addToast('Éxito', 'Reporte de conversión generado', 'success');
+      }
+      else if (reportType === 'stock_critico') {
+        const { data: result, error } = await supabase
+          .from('catalogo_piezas')
+          .select('id_pieza, nombre, marca, modelo_auto, stock, precio_referencial')
+          .lte('stock', 20)
+          .eq('disponible', true)
+          .order('stock', { ascending: true });
+
+        if (error) throw error;
+        setData(result);
+        setSummary({ totalPiezas: result.length });
+        addToast('Éxito', 'Reporte de stock crítico generado', 'success');
+      }
+      else if (reportType === 'estado_contenedores') {
+        const { data: result, error } = await supabase
+          .from('contenedores')
+          .select('id_contenedor, codigo_serial, fecha_llegada, estado_distribucion');
+
+        if (error) throw error;
+        
+        // agrupar por estado
+        const agrupado = {
+          'En Origen': 0,
+          'En Tránsito': 0,
+          'En Puerto': 0,
+          'En Almacén': 0
+        };
+        
+        result.forEach(c => {
+          if (agrupado[c.estado_distribucion] !== undefined) {
+            agrupado[c.estado_distribucion] += 1;
+          }
+        });
+        
+        setData(Object.entries(agrupado).map(([estado, cantidad]) => ({ estado, cantidad })));
+        setSummary({ totalContenedores: result.length });
+        addToast('Éxito', 'Reporte de estado logístico generado', 'success');
       }
     } catch (error) {
       console.error(error);
@@ -189,9 +225,9 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
       });
       csv += `\nTOTALES,,,,${summary.totalBultos},${summary.totalPeso},${summary.totalUsd},${summary.totalBs}`;
     } else if (reportType === 'rendimiento') {
-      csv = 'Usuario,Clientes,Proveedores,Cotizaciones,Importaciones,Notas de Entrega,Total Actividad\n';
+      csv = 'Usuario,Contenedores,Cotizaciones,Movimientos Kardex,Notas de Entrega,Total Actividad\n';
       data.forEach(row => {
-        csv += `"${row.usuario}",${row.clientes},${row.proveedores},${row.cotizaciones},${row.importaciones},${row.notas},${row.total}\n`;
+        csv += `"${row.usuario}",${row.contenedores},${row.cotizaciones},${row.movimientos_kardex},${row.notas},${row.total}\n`;
       });
     } else if (reportType === 'top_clientes') {
       csv = 'Ranking,Cliente,Empresa,Telefono,Cant. Compras,Total Bultos,Total Invertido USD,Total Invertido Bs\n';
@@ -202,6 +238,16 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
       csv = 'Periodo,Cotizaciones Emitidas,Ventas Cerradas (Notas),Valor Cotizado USD,Valor Cerrado USD,Tasa de Conversion %\n';
       data.forEach(row => {
         csv += `"${row.periodo}",${row.cotizaciones_emitidas},${row.notas_generadas},${row.valor_cotizado},${row.valor_cerrado},${row.tasa_conversion}%\n`;
+      });
+    } else if (reportType === 'stock_critico') {
+      csv = 'Pieza,Marca,Modelo,Stock Actual,Precio Ref USD\n';
+      data.forEach(row => {
+        csv += `"${row.nombre}","${row.marca || ''}","${row.modelo_auto || ''}",${row.stock},${row.precio_referencial || 0}\n`;
+      });
+    } else if (reportType === 'estado_contenedores') {
+      csv = 'Estado de Distribucion,Cantidad de Contenedores\n';
+      data.forEach(row => {
+        csv += `"${row.estado}",${row.cantidad}\n`;
       });
     }
 
@@ -286,6 +332,8 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
                   <option value="ingresos">Ingresos de Ventas / Liquidaciones</option>
                   <option value="top_clientes">Ranking VIP de Clientes (Top Compradores)</option>
                   <option value="conversion">Embudo de Ventas (Cotizaciones vs Entregas)</option>
+                  <option value="stock_critico">Alerta de Stock Crítico</option>
+                  <option value="estado_contenedores">Visión Global de Contenedores</option>
                 </optgroup>
                 <optgroup label="Administrativo">
                   <option value="rendimiento">Rendimiento de Integrantes</option>
@@ -337,6 +385,17 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
               {loading ? 'PROCESANDO...' : 'GENERAR REPORTE'}
             </button>
           </div>
+          
+          {/* Dynamic Report Description */}
+          <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#F0F9FF', borderRadius: '6px', borderLeft: '4px solid #3B82F6', fontSize: '13px', color: '#1E3A8A' }}>
+            <strong>¿Para qué sirve este reporte?</strong><br/>
+            {reportType === 'ingresos' && 'Analiza la cantidad de Notas de Entrega generadas en un periodo y suma los montos totales (en Bs y USD) así como el volumen físico movido. Útil para conocer el ingreso bruto en un rango de fechas.'}
+            {reportType === 'top_clientes' && 'Clasifica a tus clientes de mayor a menor según el dinero total que han invertido en sus compras (Notas de Entrega). Útil para identificar a tus cuentas VIP y ofrecerles mejores condiciones o fidelización.'}
+            {reportType === 'conversion' && 'Mide la efectividad del equipo de ventas. Compara el número y valor monetario de las cotizaciones emitidas contra las ventas realmente cerradas (Notas de Entrega). Útil para ver cuántas oportunidades se están perdiendo.'}
+            {reportType === 'rendimiento' && 'Realiza una auditoría del sistema contando cuántas acciones operativas (crear clientes, proveedores, cotizaciones, notas o registrar contenedores) ha realizado cada usuario. Útil para medir la productividad del personal.'}
+            {reportType === 'stock_critico' && 'Lista todas las piezas cuyo inventario actual sea igual o menor a 20 unidades. No requiere filtro de fecha. Útil para el departamento de compras al momento de decidir qué pedir en el próximo contenedor.'}
+            {reportType === 'estado_contenedores' && 'Agrupa y contabiliza todos los contenedores registrados según su estado de distribución (En Origen, En Tránsito, En Puerto, En Almacén). No requiere filtro de fecha. Útil para conocer el embudo logístico.'}
+          </div>
         </div>
 
         {/* Zona de Renderizado del Reporte */}
@@ -351,6 +410,8 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
                   {reportType === 'rendimiento' && 'Reporte de Rendimiento de Integrantes'}
                   {reportType === 'top_clientes' && 'Ranking de Clientes VIP'}
                   {reportType === 'conversion' && 'Reporte de Conversión Comercial'}
+                  {reportType === 'stock_critico' && 'Reporte de Alerta de Stock Crítico'}
+                  {reportType === 'estado_contenedores' && 'Visión Global Logística'}
                 </h2>
                 <p style={{ margin: '8px 0 0', color: '#4B5563', fontSize: '13px' }}>
                   Generado por: {userProfile?.nombre || 'Administrador'} <br/>
@@ -461,28 +522,36 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
                       <tr style={{ background: '#1E293B', color: '#FFF' }}>
                         <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB', width: '50px' }}>#</th>
                         <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB' }}>CLIENTE</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>CANTIDAD COMPRAS</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>VOLUMEN (Bultos)</th>
+                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>COMPRAS</th>
                         <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #E5E7EB' }}>INVERSIÓN TOTAL $USD</th>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB', width: '30%' }}>GRÁFICO VISUAL</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.map((row, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold', color: i < 3 ? '#F59E0B' : '#6B7280', fontSize: i < 3 ? '16px' : '14px' }}>
-                            {i + 1}
-                          </td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
-                            <div style={{ fontWeight: 'bold' }}>{row.nombre}</div>
-                            <div style={{ fontSize: '12px', color: '#6B7280' }}>{row.empresa || 'Sin empresa'} • {row.telefono || 'Sin teléfono'}</div>
-                          </td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold' }}>{row.compras}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.bultos}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'right', fontWeight: 'bold', color: '#047857', fontSize: '15px' }}>
-                            $ {row.total_usd.toLocaleString('en-US', {minimumFractionDigits: 2})}
-                          </td>
-                        </tr>
-                      ))}
+                      {data.map((row, i) => {
+                        const maxUsd = data.length > 0 ? data[0].total_usd : 1;
+                        const percentage = (row.total_usd / maxUsd) * 100;
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold', color: i < 3 ? '#F59E0B' : '#6B7280', fontSize: i < 3 ? '16px' : '14px' }}>
+                              {i + 1}
+                            </td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
+                              <div style={{ fontWeight: 'bold' }}>{row.nombre}</div>
+                              <div style={{ fontSize: '12px', color: '#6B7280' }}>{row.empresa || 'Sin empresa'} • {row.telefono || 'Sin teléfono'}</div>
+                            </td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold' }}>{row.compras}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'right', fontWeight: 'bold', color: '#047857', fontSize: '15px' }}>
+                              $ {row.total_usd.toLocaleString('en-US', {minimumFractionDigits: 2})}
+                            </td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
+                              <div style={{ width: '100%', background: '#E5E7EB', borderRadius: '4px', height: '12px', overflow: 'hidden' }}>
+                                <div style={{ width: `${percentage}%`, background: i < 3 ? '#F59E0B' : '#10B981', height: '100%', borderRadius: '4px' }}></div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </>
@@ -569,30 +638,121 @@ export default function ReportesUsuarios({ addToast, userProfile }) {
                     <thead>
                       <tr style={{ background: '#1E293B', color: '#FFF' }}>
                         <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB' }}>INTEGRANTE / USUARIO</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>CLIENTES</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>PROVEEDORES</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>COTIZACIONES</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>IMPORTACIONES</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>NOTAS ENTREGA</th>
-                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB', background: '#334155' }}>TOTAL ACTIVIDAD</th>
+                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>REGISTROS</th>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB', width: '40%' }}>NIVEL DE ACTIVIDAD VISUAL</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.map((row, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Users size={16} color="#6B7280"/> {row.usuario}
-                          </td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.clientes}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.proveedores}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.cotizaciones}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.importaciones}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center' }}>{row.notas}</td>
-                          <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold', color: '#4338CA', background: '#EEF2FF' }}>
-                            {row.total}
-                          </td>
-                        </tr>
-                      ))}
+                      {data.map((row, i) => {
+                        const maxAct = data.length > 0 ? data[0].total : 1;
+                        const percentage = (row.total / maxAct) * 100;
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Users size={16} color="#6B7280"/> {row.usuario}
+                            </td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: 'bold', color: '#4338CA', fontSize: '16px' }}>
+                              {row.total}
+                            </td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
+                              <div style={{ width: '100%', background: '#E5E7EB', borderRadius: '4px', height: '16px', overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: `${percentage}%`, background: '#3B82F6', height: '100%', borderRadius: '4px', transition: 'width 1s ease-in-out' }}></div>
+                                <span style={{ position: 'absolute', top: 0, left: '8px', fontSize: '10px', color: percentage > 10 ? '#FFF' : '#374151', lineHeight: '16px', fontWeight: 'bold' }}>{row.total} operaciones</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* ----------------- STOCK CRITICO ----------------- */}
+              {reportType === 'stock_critico' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '16px', marginBottom: '30px' }}>
+                    <div style={{ background: '#FEF2F2', padding: '20px', borderRadius: '8px', borderLeft: '4px solid #EF4444' }}>
+                      <div style={{ color: '#B91C1C', fontSize: '12px', fontWeight: 'bold' }}>PIEZAS EN ALERTA DE STOCK (≤ 20)</div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#0F172A', marginTop: '4px' }}>{summary.totalPiezas} piezas</div>
+                    </div>
+                  </div>
+
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                    <thead>
+                      <tr style={{ background: '#1E293B', color: '#FFF' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB' }}>PIEZA / NOMBRE</th>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB' }}>MARCA / MODELO</th>
+                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>STOCK ACTUAL</th>
+                        <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #E5E7EB' }}>PRECIO REF USD</th>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB', width: '30%' }}>ESTADO VISUAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.map((row, i) => {
+                        const percentage = (row.stock / 20) * 100;
+                        const color = row.stock <= 5 ? '#EF4444' : (row.stock <= 10 ? '#F59E0B' : '#FCD34D');
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', fontWeight: 'bold' }}>{row.nombre}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>{row.marca} • {row.modelo_auto}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: '900', color: row.stock <= 5 ? '#DC2626' : '#111827', fontSize: '16px' }}>{row.stock}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'right', fontWeight: 'bold', color: '#047857' }}>$ {parseFloat(row.precio_referencial || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
+                              <div style={{ width: '100%', background: '#E5E7EB', borderRadius: '4px', height: '16px', overflow: 'hidden' }}>
+                                <div style={{ width: `${percentage}%`, background: color, height: '100%', borderRadius: '4px' }}></div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* ----------------- ESTADO CONTENEDORES ----------------- */}
+              {reportType === 'estado_contenedores' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '16px', marginBottom: '30px' }}>
+                    <div style={{ background: '#F5F3FF', padding: '20px', borderRadius: '8px', borderLeft: '4px solid #8B5CF6' }}>
+                      <div style={{ color: '#6D28D9', fontSize: '12px', fontWeight: 'bold' }}>CONTENEDORES EN LOGÍSTICA</div>
+                      <div style={{ fontSize: '24px', fontWeight: '900', color: '#0F172A', marginTop: '4px' }}>{summary.totalContenedores} Registros</div>
+                    </div>
+                  </div>
+
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                    <thead>
+                      <tr style={{ background: '#1E293B', color: '#FFF' }}>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB' }}>ESTADO DE DISTRIBUCIÓN</th>
+                        <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #E5E7EB' }}>CANTIDAD</th>
+                        <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #E5E7EB', width: '50%' }}>PROPORCIÓN VISUAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.map((row, i) => {
+                        const total = summary.totalContenedores || 1;
+                        const percentage = (row.cantidad / total) * 100;
+                        
+                        let color = '#3B82F6';
+                        if (row.estado === 'En Origen') color = '#9CA3AF';
+                        if (row.estado === 'En Tránsito') color = '#3B82F6';
+                        if (row.estado === 'En Puerto') color = '#F59E0B';
+                        if (row.estado === 'En Almacén') color = '#10B981';
+
+                        return (
+                          <tr key={i} style={{ background: i % 2 === 0 ? '#FFF' : '#F9FAFB' }}>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', fontWeight: 'bold' }}>{row.estado}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB', textAlign: 'center', fontWeight: '900', fontSize: '16px', color: '#4F46E5' }}>{row.cantidad}</td>
+                            <td style={{ padding: '12px', border: '1px solid #E5E7EB' }}>
+                              <div style={{ width: '100%', background: '#E5E7EB', borderRadius: '4px', height: '20px', overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: `${percentage}%`, background: color, height: '100%', borderRadius: '4px' }}></div>
+                                <span style={{ position: 'absolute', top: 0, left: '8px', fontSize: '11px', color: percentage > 15 ? '#FFF' : '#374151', lineHeight: '20px', fontWeight: 'bold' }}>{percentage.toFixed(1)}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </>

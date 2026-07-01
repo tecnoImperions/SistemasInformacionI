@@ -118,6 +118,42 @@ export default function Inicio({ addToast, userProfile, onNavigate }) {
         </div>
       </div>
 
+      {/* Quick Start Workflow Banner */}
+      <div style={{ background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)', borderRadius: '24px', padding: '32px', marginBottom: '32px', color: '#FFF', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.1)' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          🚀 Guía de Trabajo Rápido
+        </h2>
+        <p style={{ color: '#94A3B8', fontSize: '14px', marginBottom: '24px' }}>Sigue estos 4 pasos para gestionar tus importaciones y ventas correctamente.</p>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          
+          <div onClick={() => onNavigate && onNavigate('CATALOGO')} style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'none'; }}>
+            <div style={{ background: '#38BDF8', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px', fontWeight: 'bold' }}>1</div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 4px 0' }}>Registrar Inventario</h3>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>Añade tus productos y existencias.</p>
+          </div>
+
+          <div onClick={() => onNavigate && onNavigate('COTIZACIONES')} style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'none'; }}>
+            <div style={{ background: '#10B981', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px', fontWeight: 'bold' }}>2</div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 4px 0' }}>Generar Cotización</h3>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>Vende a tus clientes locales.</p>
+          </div>
+
+          <div onClick={() => onNavigate && onNavigate('CONTENEDORES')} style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'none'; }}>
+            <div style={{ background: '#8B5CF6', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px', fontWeight: 'bold' }}>3</div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 4px 0' }}>Llenar Contenedor</h3>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>Asigna compras a clientes y rutas.</p>
+          </div>
+
+          <div onClick={() => onNavigate && onNavigate('NOTAS_ENTREGA')} style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }} onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.transform = 'translateY(-2px)'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.transform = 'none'; }}>
+            <div style={{ background: '#F59E0B', width: '32px', height: '32px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '12px', fontWeight: 'bold' }}>4</div>
+            <h3 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 4px 0' }}>Entrega Nacional</h3>
+            <p style={{ fontSize: '12px', color: '#94A3B8', margin: 0 }}>Distribuye y firma entrega.</p>
+          </div>
+
+        </div>
+      </div>
+
       {/* KPI Cards Premium Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
         

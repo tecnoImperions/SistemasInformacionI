@@ -448,85 +448,87 @@ export default function Catalogo({ addToast }) {
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>Cargando catálogo...</div>
         ) : (
-          <div className="catalogo-grid">
-            {processedPiezas.map((pieza) => {
-              const offerData = parseOffer(pieza.descripcion);
-              const isOferta = offerData.isOferta;
-              const pct = parseInt(offerData.porcentaje) || 0;
-              
-              const precioUsd = parseFloat(pieza.precio_referencial) || 0;
-              let precioBob = precioUsd * tipoCambio;
-              let precioBobOriginal = null;
-
-              if (isOferta && pct > 0) {
-                precioBobOriginal = precioBob;
-                precioBob = precioBob * (1 - (pct / 100));
-              }
-
-              return (
-                <div key={pieza.id_pieza} className="pieza-card" style={{ cursor: 'pointer', transition: 'transform 0.2s', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden' }} onClick={() => openPanel(pieza)}>
-                  <div className="pieza-img-container">
-                    {isOferta && (
-                      <div className="pieza-oferta-badge">
-                        {pct > 0 ? `OFERTA -${pct}%` : 'OFERTA'}
-                      </div>
-                    )}
-                    <div className={`pieza-stock-badge ${pieza.stock < 5 ? 'low' : ''}`}>
-                      Stock: {pieza.stock}
-                    </div>
-                    {pieza.imagen_url ? (
-                      <img 
-                        src={getOptimizedUrl(pieza.imagen_url, { width: 400, height: 300, crop: 'fill' })} 
-                        alt={pieza.nombre} 
-                        className="pieza-img" 
-                      />
-                    ) : (
-                      <div className="pieza-placeholder">
-                        <ImageIcon size={48} opacity={0.3} />
-                      </div>
-                    )}
-                  </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>IMAGEN</th>
+                  <th>CÓDIGO</th>
+                  <th>NOMBRE Y MARCA</th>
+                  <th>PRECIO (Bs)</th>
+                  <th>STOCK</th>
+                  <th>ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {processedPiezas.map((pieza) => {
+                  const offerData = parseOffer(pieza.descripcion);
+                  const isOferta = offerData.isOferta;
+                  const pct = parseInt(offerData.porcentaje) || 0;
                   
-                  <div className="pieza-info">
-                    <div className="pieza-title">{pieza.nombre}</div>
-                    <div className="pieza-subtitle">
-                      {pieza.marca} {pieza.modelo_auto} {pieza.anio ? `(${pieza.anio})` : ''}
-                    </div>
-                    
-                    <div className="pieza-price-container">
-                      {precioBobOriginal && (
-                        <div className="pieza-price-original">
-                          Bs. {precioBobOriginal.toFixed(2)}
+                  const precioUsd = parseFloat(pieza.precio_referencial) || 0;
+                  let precioBob = precioUsd * tipoCambio;
+                  let precioBobOriginal = null;
+
+                  if (isOferta && pct > 0) {
+                    precioBobOriginal = precioBob;
+                    precioBob = precioBob * (1 - (pct / 100));
+                  }
+
+                  return (
+                    <tr key={pieza.id_pieza} onClick={() => openPanel(pieza)} style={{ cursor: 'pointer' }}>
+                      <td style={{ width: '60px' }}>
+                        {pieza.imagen_url ? (
+                          <img 
+                            src={getOptimizedUrl(pieza.imagen_url, { width: 48, height: 48, crop: 'fill' })} 
+                            alt={pieza.nombre} 
+                            style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #E5E7EB' }}
+                          />
+                        ) : (
+                          <div style={{ width: '48px', height: '48px', background: '#F3F4F6', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ImageIcon size={20} color="#9CA3AF" />
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: '600', color: '#374151' }}>{pieza.codigo_pieza || 'S/C'}</td>
+                      <td>
+                        <div style={{ fontWeight: 'bold', color: '#111827' }}>{pieza.nombre} {isOferta && <span style={{ padding: '2px 6px', background: '#FEF08A', color: '#854D0E', fontSize: '10px', borderRadius: '4px', marginLeft: '6px' }}>OFERTA</span>}</div>
+                        <div style={{ fontSize: '12px', color: '#6B7280' }}>{pieza.marca} {pieza.modelo_auto} {pieza.anio ? `(${pieza.anio})` : ''}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 'bold', color: '#059669' }}>Bs. {precioBob.toFixed(2)}</div>
+                        <div style={{ fontSize: '11px', color: '#9CA3AF' }}>Ref: ${precioUsd.toFixed(2)} USD</div>
+                      </td>
+                      <td>
+                        <span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', backgroundColor: pieza.stock < 5 ? '#FEE2E2' : '#D1FAE5', color: pieza.stock < 5 ? '#B91C1C' : '#047857' }}>
+                          {pieza.stock} unid.
+                        </span>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn-action" style={{ background: '#ECFDF5', color: '#10B981', border: '1px solid #A7F3D0' }} onClick={() => setStockModalPiece(pieza)} title="Gestionar Stock">
+                            <Package size={14} />
+                          </button>
+                          <button className="btn-action" style={{ background: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }} onClick={() => openPanel(pieza)} title="Editar Pieza">
+                            <Edit2 size={14} />
+                          </button>
+                          <button className="btn-action" style={{ background: '#FEF2F2', color: '#EF4444', border: '1px solid #FECACA' }} onClick={() => handleDeletePiece(pieza)} title="Eliminar Pieza">
+                            <Trash2 size={14} />
+                          </button>
                         </div>
-                      )}
-                      <div className="pieza-price-bob">
-                        <span>Bs.</span> {precioBob.toFixed(2)}
-                      </div>
-                      <div className="pieza-price-usd">
-                        Ref: ${precioUsd.toFixed(2)} USD
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="pieza-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="pieza-btn" onClick={() => setStockModalPiece(pieza)} title="Gestionar Stock">
-                      <Package size={16} color="#10B981" /> STOCK
-                    </button>
-                    <button className="pieza-btn" onClick={() => openPanel(pieza)} title="Editar Pieza">
-                      <Edit2 size={16} color="#3B82F6" /> EDITAR
-                    </button>
-                    <button className="pieza-btn" onClick={() => handleDeletePiece(pieza)} title="Eliminar Pieza">
-                      <Trash2 size={16} color="#EF4444" /> ELIMINAR
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {processedPiezas.length === 0 && (
-              <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: '#6B7280' }}>
-                No se encontraron piezas en el catálogo.
-              </div>
-            )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {processedPiezas.length === 0 && (
+                  <tr>
+                    <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>
+                      No se encontraron productos en el inventario.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -625,7 +627,7 @@ export default function Catalogo({ addToast }) {
       {isPanelOpen && (
         <div className="action-panel">
           <div className="panel-header">
-            <span>{selectedPieza ? 'Editar Pieza' : 'Nueva Pieza'}</span>
+            <span>{selectedPieza ? 'Editar Producto' : 'Nuevo Producto'}</span>
             <button className="panel-close" onClick={closePanel}>
               <X size={18} />
             </button>

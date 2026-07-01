@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
 import { Search, Plus, X, Printer, FileText, Trash2, User, Calendar, Truck, MapPin, Phone, Mail } from 'lucide-react';
-import logoImg from '../../public/logo.png';
-
+const logoImg = '/logo.png';
 export default function NotasEntrega({ addToast, userProfile }) {
   const { tipoCambio } = useStore();
   const [notas, setNotas] = useState([]);
@@ -15,8 +14,11 @@ export default function NotasEntrega({ addToast, userProfile }) {
   const [printData, setPrintData] = useState(null);
 
   // Master-Detail Form State
+  // Master-Detail Form State
   const [clientes, setClientes] = useState([]);
   const [proveedores, setProveedores] = useState([]);
+  const [transportistas, setTransportistas] = useState([]);
+  const [cotizaciones, setCotizaciones] = useState([]);
   
   const [selectedCliente, setSelectedCliente] = useState(null);
   
@@ -24,6 +26,8 @@ export default function NotasEntrega({ addToast, userProfile }) {
     numero_nota: '',
     fecha: new Date().toISOString().split('T')[0],
     observaciones: '',
+    id_transportista: '',
+    id_cotizacion: '',
     tipo_cambio: tipoCambio // Use global store exchange rate
   });
   
@@ -33,6 +37,11 @@ export default function NotasEntrega({ addToast, userProfile }) {
   const [showClienteSearch, setShowClienteSearch] = useState(false);
   const [clienteSearchTerm, setClienteSearchTerm] = useState('');
   const clienteSearchRef = useRef(null);
+  
+  const [showTranspSearch, setShowTranspSearch] = useState(false);
+  const [transpSearchTerm, setTranspSearchTerm] = useState('');
+  const transpSearchRef = useRef(null);
+
   const [activeProveedorRow, setActiveProveedorRow] = useState(null);
   const proveedorSearchRef = useRef(null);
 
@@ -43,6 +52,9 @@ export default function NotasEntrega({ addToast, userProfile }) {
     function handleClickOutside(event) {
       if (clienteSearchRef.current && !clienteSearchRef.current.contains(event.target)) {
         setShowClienteSearch(false);
+      }
+      if (transpSearchRef.current && !transpSearchRef.current.contains(event.target)) {
+        setShowTranspSearch(false);
       }
       if (proveedorSearchRef.current && !proveedorSearchRef.current.contains(event.target)) {
         setActiveProveedorRow(null);
@@ -85,7 +97,8 @@ export default function NotasEntrega({ addToast, userProfile }) {
         .from('notas_entrega')
         .select(`
           *,
-          clientes ( nombre, empresa, direccion, telefono )
+          clientes ( nombre, empresa, direccion, telefono ),
+          usuarios ( nombre )
         `)
         .order('id_nota', { ascending: false });
       
@@ -103,9 +116,13 @@ export default function NotasEntrega({ addToast, userProfile }) {
     try {
       const { data: cData } = await supabase.from('clientes').select('*').eq('estado', true);
       const { data: pData } = await supabase.from('proveedores').select('*').eq('estado', true);
+      const { data: tData } = await supabase.from('transportistas').select('*').eq('estado', true);
+      const { data: cotData } = await supabase.from('cotizaciones').select('*, clientes(nombre)').eq('estado', 'ACEPTADA');
       
       setClientes(cData || []);
       setProveedores(pData || []);
+      setTransportistas(tData || []);
+      setCotizaciones(cotData || []);
     } catch (err) {
       console.error(err);
     }
@@ -124,6 +141,7 @@ export default function NotasEntrega({ addToast, userProfile }) {
       numero_nota: generateNotaNumber(),
       fecha: new Date().toISOString().split('T')[0],
       observaciones: '',
+      id_cotizacion: '',
       tipo_cambio: tipoCambio
     });
     setClienteSearchTerm('');
@@ -218,6 +236,7 @@ export default function NotasEntrega({ addToast, userProfile }) {
         .insert([{
           numero_nota: formData.numero_nota,
           id_cliente: selectedCliente.id_cliente,
+          id_transportista: formData.id_transportista || null,
           fecha: formData.fecha,
           tipo_cambio: formData.tipo_cambio,
           total_bultos: totales.bultos,
@@ -225,7 +244,9 @@ export default function NotasEntrega({ addToast, userProfile }) {
           total_usd: totales.totalUsd,
           total_bs: totales.totalBs,
           observaciones: formData.observaciones,
-          estado: 'EMITIDA'
+          estado: 'EMITIDA',
+          id_cotizacion: formData.id_cotizacion || null,
+          id_usuario: userProfile?.id || null
         }])
         .select()
         .single();
@@ -257,6 +278,24 @@ export default function NotasEntrega({ addToast, userProfile }) {
     } catch (err) {
       console.error(err);
       if (addToast) addToast('Error', 'Error al guardar la nota de entrega', 'error');
+    }
+  };
+
+  const handleChangeEstado = async (id_nota, nuevoEstado) => {
+    try {
+      const { error } = await supabase
+        .from('notas_entrega')
+        .update({ 
+          estado: nuevoEstado,
+          id_usuario: userProfile?.id || null
+        })
+        .eq('id_nota', id_nota);
+      
+      if (error) throw error;
+      if (addToast) addToast('Éxito', `Estado actualizado a ${nuevoEstado}`, 'success');
+      fetchNotas();
+    } catch (err) {
+      if (addToast) addToast('Error', 'No se pudo actualizar el estado', 'error');
     }
   };
 
@@ -317,6 +356,11 @@ export default function NotasEntrega({ addToast, userProfile }) {
         <div className="clients-section">
           <h1 className="page-title">Liquidaciones / Notas de Entrega</h1>
           
+          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', padding: '16px', borderRadius: '12px', marginBottom: '20px', color: '#9A3412' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 'bold' }}>🚚 Módulo de Entregas Nacionales</h4>
+            <p style={{ margin: 0, fontSize: '13px' }}>Crea una nota cuando el contenedor llegó a tu almacén y vayas a despachar a los clientes. Cambia el estado a <strong>EN CAMINO</strong> cuando el camión salga, y a <strong>ENTREGADA</strong> cuando el cliente reciba.</p>
+          </div>
+          
           <div className="toolbar">
             <div className="search-box">
               <Search size={18} color="#9CA3AF" />
@@ -342,6 +386,7 @@ export default function NotasEntrega({ addToast, userProfile }) {
                   <th>BULTOS / PESO</th>
                   <th>TOTAL (Bs.)</th>
                   <th>ESTADO</th>
+                  <th>OPERADOR</th>
                   <th>ACCIONES</th>
                 </tr>
               </thead>
@@ -369,9 +414,29 @@ export default function NotasEntrega({ addToast, userProfile }) {
                         Bs. {parseFloat(nota.total_bs).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                       <td>
-                        <span style={{ padding: '4px 8px', background: '#D1FAE5', color: '#065F46', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                          {nota.estado}
-                        </span>
+                        <select 
+                          value={nota.estado}
+                          onChange={(e) => handleChangeEstado(nota.id_nota, e.target.value)}
+                          style={{ 
+                            padding: '4px 8px', 
+                            background: nota.estado === 'ENTREGADA' ? '#D1FAE5' : (nota.estado === 'CANCELADA' ? '#FEE2E2' : '#FEF3C7'), 
+                            color: nota.estado === 'ENTREGADA' ? '#065F46' : (nota.estado === 'CANCELADA' ? '#991B1B' : '#92400E'), 
+                            border: 'none',
+                            borderRadius: '4px', 
+                            fontSize: '11px', 
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="EMITIDA">EMITIDA</option>
+                          <option value="EN CAMINO">EN CAMINO</option>
+                          <option value="ENTREGADA">ENTREGADA</option>
+                          <option value="CANCELADA">CANCELADA</option>
+                        </select>
+                      </td>
+                      <td style={{ fontSize: '12px', color: '#6B7280' }}>
+                        {nota.usuarios?.nombre || 'S/N'}
                       </td>
                       <td style={{ display: 'flex', gap: '8px' }}>
                         <button className="btn-action" style={{ background: '#FEE2E2', color: '#B91C1C' }} onClick={() => handleActionRequest(nota, 'pdf')} title="Descargar PDF">
@@ -403,43 +468,168 @@ export default function NotasEntrega({ addToast, userProfile }) {
             
             <div className="panel-content" style={{ display: 'flex', flexDirection: 'column' }}>
               
+              <div style={{ padding: '12px', background: '#EFF6FF', border: '1px dashed #60A5FA', borderRadius: '8px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', color: '#1E3A8A', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <span style={{ marginRight: '6px', color: '#F59E0B' }}>⚡</span> Acción Rápida: Levantar pedido de Cotización
+                </div>
+                <select 
+                  value={formData.id_cotizacion || ''}
+                  onChange={async (e) => {
+                    const id_cot = e.target.value;
+                    setFormData({...formData, id_cotizacion: id_cot});
+                    if (id_cot) {
+                      const cot = cotizaciones.find(c => c.id_cotizacion == id_cot);
+                      if (cot && cot.id_cliente) {
+                        const cliente = clientes.find(c => c.id_cliente == cot.id_cliente);
+                        if (cliente) {
+                          setSelectedCliente(cliente);
+                        }
+                        
+                        // Fetch pieces in this quote
+                        const { data: quoteDetails } = await supabase
+                          .from('detalle_cotizacion')
+                          .select('id_pieza')
+                          .eq('id_cotizacion', id_cot);
+                          
+                        const quotePieceIds = quoteDetails ? quoteDetails.map(qd => qd.id_pieza) : [];
+                        
+                        let contDetalles = [];
+                        if (quotePieceIds.length > 0) {
+                          const { data: result } = await supabase
+                            .from('contenedor_detalles')
+                            .select('*, proveedores(nombre)')
+                            .eq('id_cliente', cot.id_cliente)
+                            .in('id_pieza', quotePieceIds)
+                            .order('created_at', { ascending: false });
+                            
+                          if (result && result.length > 0) {
+                            // Keep only the most recent container detail per piece to avoid pulling historical providers
+                            const latestPieces = {};
+                            result.forEach(r => {
+                              if (!latestPieces[r.id_pieza]) {
+                                latestPieces[r.id_pieza] = r;
+                              }
+                            });
+                            contDetalles = Object.values(latestPieces);
+                          }
+                        }
+                          
+                        if (contDetalles.length > 0) {
+                          const grouped = {};
+                          contDetalles.forEach(cd => {
+                            if (!grouped[cd.id_proveedor]) {
+                              grouped[cd.id_proveedor] = {
+                                id_proveedor: cd.id_proveedor,
+                                nombre_proveedor: cd.proveedores?.nombre || '',
+                                numero_factura: cd.numero_factura || '',
+                                valor_factura: 0,
+                                flete: 0,
+                                cantidad_bultos: 1,
+                                peso_kg: 0,
+                                total_liquidacion: 0
+                              };
+                            } else {
+                              if (cd.numero_factura && !grouped[cd.id_proveedor].numero_factura.includes(cd.numero_factura)) {
+                                grouped[cd.id_proveedor].numero_factura += grouped[cd.id_proveedor].numero_factura ? `, ${cd.numero_factura}` : cd.numero_factura;
+                              }
+                            }
+                            grouped[cd.id_proveedor].valor_factura += (parseFloat(cd.costo_compra) * parseInt(cd.cantidad));
+                          });
+                          
+                          // Convert to array and update total liquidacion
+                          const newDetalles = Object.values(grouped).map(d => ({
+                            ...d,
+                            total_liquidacion: d.valor_factura + d.flete
+                          }));
+                          setDetalles(newDetalles);
+                        }
+                      }
+                    } else {
+                      setDetalles([]);
+                    }
+                  }}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #BFDBFE', borderRadius: '4px', fontSize: '13px' }}
+                >
+                  <option value="">-- Selecciona una Cotización Aceptada --</option>
+                  {cotizaciones.map(c => (
+                    <option key={c.id_cotizacion} value={c.id_cotizacion}>
+                      {c.numero_cotizacion || `COT-${c.id_cotizacion}`} | Cliente: {c.clientes?.nombre || 'Desconocido'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
                 {/* Cliente Select */}
                 <div className="detail-group" ref={clienteSearchRef} style={{ flex: 2, margin: 0 }}>
-                  <div className="detail-label">Cliente *</div>
-                  {selectedCliente ? (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '4px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: '500' }}>{selectedCliente.nombre}</div>
-                      <button onClick={() => setSelectedCliente(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444' }}><X size={14}/></button>
-                    </div>
-                  ) : (
-                    <div className="autocomplete-container">
-                      <input 
-                        type="text" 
-                        placeholder="Buscar cliente..." 
+                  <div className="detail-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Cliente Destino *</span>
+                    {selectedCliente && (
+                      <button onClick={() => { setSelectedCliente(null); setClienteSearchTerm(''); }} style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}>CAMBIAR CLIENTE</button>
+                    )}
+                  </div>
+                  {!selectedCliente ? (
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="Buscar por nombre o empresa..."
                         value={clienteSearchTerm}
                         onChange={(e) => { setClienteSearchTerm(e.target.value); setShowClienteSearch(true); }}
                         onFocus={() => setShowClienteSearch(true)}
-                        style={{ width: '100%', padding: '8px', border: '1px solid #E5E7EB', borderRadius: '4px', fontSize: '13px' }}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #3B82F6', borderRadius: '4px', background: '#EFF6FF', outline: 'none' }}
                       />
                       {showClienteSearch && (
                         <div className="autocomplete-dropdown">
-                          {filteredClientes.map(c => (
+                          {clientes.filter(c => c.nombre.toLowerCase().includes(clienteSearchTerm.toLowerCase())).slice(0, 5).map(c => (
                             <div key={c.id_cliente} className="autocomplete-item" onClick={() => { setSelectedCliente(c); setShowClienteSearch(false); }}>
-                              <span className="autocomplete-item-title">{c.nombre}</span>
-                              <span className="autocomplete-item-subtitle">{c.email || c.telefono || 'Sin datos'}</span>
+                              <strong>{c.nombre}</strong> {c.empresa && <span style={{ fontSize: '11px', color: '#6B7280' }}>({c.empresa})</span>}
                             </div>
                           ))}
-                          {filteredClientes.length === 0 && <div style={{ padding: '10px', fontSize: '12px', color: '#6B7280' }}>No se encontraron clientes</div>}
                         </div>
                       )}
+                    </div>
+                  ) : (
+                    <div style={{ background: '#F0FDF4', padding: '12px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                      <div style={{ fontWeight: 'bold', color: '#166534', fontSize: '14px' }}>{selectedCliente.nombre}</div>
+                      <div style={{ fontSize: '12px', color: '#15803D', marginTop: '4px' }}>{selectedCliente.empresa || 'Cliente Final'} | {selectedCliente.telefono || 'Sin teléfono'}</div>
                     </div>
                   )}
                 </div>
 
+                <div className="detail-group" ref={transpSearchRef} style={{ flex: 1, margin: 0 }}>
+                  <div className="detail-label">Transportista (Chofer)</div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      placeholder="Buscar chofer/placa..."
+                      value={transpSearchTerm}
+                      onChange={(e) => { 
+                        setTranspSearchTerm(e.target.value); 
+                        setShowTranspSearch(true); 
+                        if(formData.id_transportista) setFormData({...formData, id_transportista: ''});
+                      }}
+                      onFocus={() => setShowTranspSearch(true)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #D1D5DB', borderRadius: '4px', outline: 'none' }}
+                    />
+                    {showTranspSearch && (
+                      <div className="autocomplete-dropdown" style={{ background: '#FFF', position: 'absolute', top: '100%', zIndex: 50, width: '100%', border: '1px solid #E5E7EB', borderRadius: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                        {transportistas.filter(t => t.nombre.toLowerCase().includes(transpSearchTerm.toLowerCase()) || (t.placa_vehiculo||'').toLowerCase().includes(transpSearchTerm.toLowerCase())).map(t => (
+                          <div key={t.id_transportista} className="autocomplete-item" style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #F3F4F6' }} onClick={() => { 
+                            setFormData({...formData, id_transportista: t.id_transportista});
+                            setTranspSearchTerm(`${t.nombre} - ${t.placa_vehiculo || 'S/P'}`);
+                            setShowTranspSearch(false);
+                          }}>
+                            <strong>{t.nombre}</strong> <span style={{ fontSize: '11px', color: '#6B7280' }}>{t.placa_vehiculo || 'Sin placa'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="detail-group" style={{ flex: 1, margin: 0 }}>
-                  <div className="detail-label">Nro de Nota</div>
-                  <input type="text" value={formData.numero_nota} onChange={e => setFormData({...formData, numero_nota: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #E5E7EB', borderRadius: '4px', fontSize: '13px', fontWeight: 'bold' }} />
+                  <div className="detail-label">Nro. Nota</div>
+                  <input type="text" value={formData.numero_nota} onChange={e => setFormData({...formData, numero_nota: e.target.value})} style={{ width: '100%', padding: '8px', background: '#F3F4F6', border: '1px solid #E5E7EB', borderRadius: '4px', fontWeight: 'bold' }} />
                 </div>
               </div>
 
@@ -489,8 +679,8 @@ export default function NotasEntrega({ addToast, userProfile }) {
                               style={{ width: '100%', padding: '4px 8px', fontSize: '12px', border: '1px solid #D1D5DB', borderRadius: '4px' }}
                             />
                             {activeProveedorRow === i && (
-                              <div className="autocomplete-dropdown" style={{ top: '100%', left: 0, right: 0, zIndex: 10 }}>
-                                {proveedores.filter(p => p.nombre.toLowerCase().includes((d.nombre_proveedor || '').toLowerCase())).slice(0,5).map(p => (
+                              <div className="autocomplete-dropdown" style={{ top: '100%', left: 0, right: 0, zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                                {proveedores.filter(p => p.nombre.toLowerCase().includes((d.nombre_proveedor || '').toLowerCase())).slice(0,50).map(p => (
                                   <div key={p.id_proveedor} className="autocomplete-item" onClick={() => { 
                                       actualizarDetalle(i, 'nombre_proveedor', p.nombre);
                                       actualizarDetalle(i, 'id_proveedor', p.id_proveedor);

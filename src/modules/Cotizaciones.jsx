@@ -3,15 +3,16 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
 import { Search, Plus, X, Printer, FileText, Trash2, User, Calendar } from 'lucide-react';
 
-export default function Cotizaciones({ addToast }) {
+export default function Cotizaciones({ addToast, userProfile }) {
   const { tipoCambio } = useStore();
   const [cotizaciones, setCotizaciones] = useState([]);
   const [search, setSearch] = useState('');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Print state
+  // Print and View state
   const [printData, setPrintData] = useState(null);
+  const [viewingData, setViewingData] = useState(null);
 
   // Master-Detail Form State
   const [clientes, setClientes] = useState([]);
@@ -64,7 +65,8 @@ export default function Cotizaciones({ addToast }) {
         .from('cotizaciones')
         .select(`
           *,
-          clientes ( nombre )
+          clientes ( nombre ),
+          usuarios ( nombre )
         `)
         .order('id_cotizacion', { ascending: false });
       
@@ -163,6 +165,7 @@ export default function Cotizaciones({ addToast }) {
           fecha: formData.fecha,
           total: total,
           estado: 'PENDIENTE',
+          id_usuario: userProfile?.id || null,
           observaciones: formData.observaciones ? `${formData.observaciones}\n(TC aplicado: ${tipoCambio} Bs/$)` : `(TC aplicado: ${tipoCambio} Bs/$)`
         }])
         .select()
@@ -194,6 +197,21 @@ export default function Cotizaciones({ addToast }) {
     }
   };
 
+  const handleChangeEstado = async (id_cotizacion, nuevoEstado) => {
+    try {
+      const { error } = await supabase
+        .from('cotizaciones')
+        .update({ estado: nuevoEstado })
+        .eq('id_cotizacion', id_cotizacion);
+      
+      if (error) throw error;
+      if (addToast) addToast('Éxito', `Estado actualizado a ${nuevoEstado}`, 'success');
+      fetchCotizaciones();
+    } catch (err) {
+      if (addToast) addToast('Error', 'No se pudo actualizar el estado', 'error');
+    }
+  };
+
   const handlePrintRequest = async (cotizacion) => {
     try {
       const { data: detallesData, error } = await supabase
@@ -215,6 +233,30 @@ export default function Cotizaciones({ addToast }) {
     } catch (err) {
       console.error(err);
       if (addToast) addToast('Error', 'No se pudieron cargar los detalles para imprimir', 'error');
+    }
+  };
+
+  const handleViewDetails = async (cotizacion) => {
+    try {
+      const { data: detallesData, error } = await supabase
+        .from('detalle_cotizacion')
+        .select(`
+          cantidad,
+          precio_unitario,
+          subtotal,
+          catalogo_piezas ( nombre, marca, modelo_auto )
+        `)
+        .eq('id_cotizacion', cotizacion.id_cotizacion);
+        
+      if (error) throw error;
+      
+      setViewingData({
+        ...cotizacion,
+        detalles: detallesData || []
+      });
+    } catch (err) {
+      console.error(err);
+      if (addToast) addToast('Error', 'No se pudieron cargar los detalles', 'error');
     }
   };
 
@@ -241,6 +283,11 @@ export default function Cotizaciones({ addToast }) {
         <div className="clients-section">
           <h1 className="page-title">RF07/RF10: Cotizaciones</h1>
           
+          <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '16px', borderRadius: '12px', marginBottom: '20px', color: '#1E3A8A' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', fontWeight: 'bold' }}>💡 Módulo de Ventas (Cotizaciones)</h4>
+            <p style={{ margin: 0, fontSize: '13px' }}>Usa esta pantalla para armar proformas a tus clientes. Cuando el cliente te confirme la compra, haz clic en el botón desplegable de ESTADO en la tabla y cámbialo a <strong>ACEPTADA</strong>.</p>
+          </div>
+          
           <div className="toolbar">
             <div className="search-box">
               <Search size={18} color="#9CA3AF" />
@@ -265,6 +312,7 @@ export default function Cotizaciones({ addToast }) {
                   <th>FECHA</th>
                   <th>TOTAL (Bs.)</th>
                   <th>ESTADO</th>
+                  <th>VENDEDOR</th>
                   <th>ACCIONES</th>
                 </tr>
               </thead>
@@ -282,6 +330,7 @@ export default function Cotizaciones({ addToast }) {
                           <User size={14} color="#6B7280" /> {cot.clientes?.nombre || 'Desconocido'}
                         </div>
                       </td>
+
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Calendar size={14} color="#6B7280" /> {cot.fecha}
@@ -291,21 +340,38 @@ export default function Cotizaciones({ addToast }) {
                         Bs. {parseFloat(cot.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                       <td>
-                        <span style={{ 
-                          padding: '4px 8px', 
-                          borderRadius: '4px', 
-                          fontSize: '11px', 
-                          fontWeight: 'bold',
-                          background: cot.estado === 'FACTURADA' ? '#D1FAE5' : cot.estado === 'RECHAZADA' ? '#FEE2E2' : '#FEF3C7',
-                          color: cot.estado === 'FACTURADA' ? '#065F46' : cot.estado === 'RECHAZADA' ? '#991B1B' : '#92400E'
-                        }}>
-                          {cot.estado || 'PENDIENTE'}
-                        </span>
+                        <select 
+                          value={cot.estado || 'PENDIENTE'}
+                          onChange={(e) => handleChangeEstado(cot.id_cotizacion, e.target.value)}
+                          style={{ 
+                            padding: '4px 8px', 
+                            borderRadius: '4px', 
+                            fontSize: '11px', 
+                            fontWeight: 'bold',
+                            border: 'none',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            background: cot.estado === 'ACEPTADA' ? '#D1FAE5' : (cot.estado === 'RECHAZADA' ? '#FEE2E2' : '#FEF3C7'),
+                            color: cot.estado === 'ACEPTADA' ? '#065F46' : (cot.estado === 'RECHAZADA' ? '#991B1B' : '#92400E')
+                          }}
+                        >
+                          <option value="PENDIENTE">PENDIENTE</option>
+                          <option value="ACEPTADA">ACEPTADA</option>
+                          <option value="RECHAZADA">RECHAZADA</option>
+                        </select>
+                      </td>
+                      <td style={{ fontSize: '12px', color: '#6B7280' }}>
+                        {cot.usuarios?.nombre || 'S/N'}
                       </td>
                       <td>
-                        <button className="btn-action" style={{ background: '#F3F4F6', color: '#374151' }} onClick={() => handlePrintRequest(cot)}>
-                          <Printer size={12} /> IMPRIMIR
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn-action" style={{ background: '#E0F2FE', color: '#0369A1' }} onClick={() => handleViewDetails(cot)}>
+                            <FileText size={12} /> VER DETALLES
+                          </button>
+                          <button className="btn-action" style={{ background: '#F3F4F6', color: '#374151' }} onClick={() => handlePrintRequest(cot)}>
+                            <Printer size={12} /> IMPRIMIR
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -459,6 +525,50 @@ export default function Cotizaciones({ addToast }) {
               <div className="panel-actions">
                 <button className="btn-save" onClick={handleSave}>GENERAR COTIZACIÓN</button>
                 <button className="btn-cancel" onClick={closePanel}>CANCELAR</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {viewingData && (
+          <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div className="modal-content" style={{ background: '#FFF', padding: '24px', borderRadius: '8px', width: '600px', maxWidth: '90%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #E5E7EB', paddingBottom: '12px' }}>
+                <h3 style={{ margin: 0, color: '#111827' }}>Detalles de Cotización {viewingData.numero_cotizacion || `COT-${viewingData.id_cotizacion}`}</h3>
+                <button onClick={() => setViewingData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}><X size={20} /></button>
+              </div>
+              
+              <div style={{ marginBottom: '16px', fontSize: '14px', color: '#374151' }}>
+                <strong>Cliente:</strong> {viewingData.clientes?.nombre} <br/>
+                <strong>Estado:</strong> {viewingData.estado} <br/>
+                <strong>Total (Bs):</strong> {parseFloat(viewingData.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>
+                    <th style={{ padding: '8px' }}>Producto</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>Cant.</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>P.Unit (Bs)</th>
+                    <th style={{ padding: '8px', textAlign: 'right' }}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewingData.detalles?.map((det, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #E5E7EB' }}>
+                      <td style={{ padding: '8px' }}>
+                        {det.catalogo_piezas?.nombre} <br/>
+                        <span style={{ fontSize: '11px', color: '#6B7280' }}>{det.catalogo_piezas?.marca} {det.catalogo_piezas?.modelo_auto}</span>
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>{det.cantidad}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>{parseFloat(det.precio_unitario).toFixed(2)}</td>
+                      <td style={{ padding: '8px', textAlign: 'right' }}>{parseFloat(det.subtotal).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={() => setViewingData(null)} className="btn-secondary" style={{ padding: '8px 16px' }}>Cerrar</button>
               </div>
             </div>
           </div>

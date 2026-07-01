@@ -4,22 +4,26 @@ import './index.css';
 import { 
   Home, Calendar, Settings, Bell, Search,
   Globe, BarChart, Users, FileText, Briefcase, Shield, LogOut,
-  CheckCircle, AlertCircle, Info, X, Store
+  CheckCircle, AlertCircle, Info, X, Store, Camera, Truck, DollarSign, History
 } from 'lucide-react';
 
+const logoEmpresa = '/logo.png';
 import Clientes from './modules/Clientes';
 import Proveedores from './modules/Proveedores';
 import Contenedores from './modules/Contenedores';
+import Cotizaciones from './modules/Cotizaciones';
 import Inicio from './modules/Inicio';
 import Catalogo from './modules/Catalogo';
 import Importaciones from './modules/Importaciones';
 import NotasEntrega from './modules/NotasEntrega';
 import PaginaWeb from './modules/PaginaWeb';
-import logoEmpresa from '../public/logo.png';
 import ReportesUsuarios from './modules/ReportesUsuarios';
 import Notificaciones from './modules/Notificaciones';
 import CentroAyuda from './modules/CentroAyuda';
 import PerfilUsuario from './modules/PerfilUsuario';
+import Transportes from './modules/Transportes';
+import Finanzas from './modules/Finanzas';
+import Kardex from './modules/Kardex';
 import { useStore } from './lib/store';
 import Swal from 'sweetalert2';
 
@@ -252,6 +256,7 @@ function Dashboard({ session }) {
         setUserProfile(data);
       } else {
         setUserProfile({ 
+          id: session.user.id,
           nombre: session.user.email.split('@')[0], 
           rol: 'Usuario' 
         });
@@ -269,6 +274,7 @@ function Dashboard({ session }) {
       case 'PROVEEDORES': return <Proveedores addToast={addToast} userProfile={userProfile} />;
       case 'CONTENEDORES': return <Contenedores addToast={addToast} userProfile={userProfile} />;
       case 'INICIO': return <Inicio addToast={addToast} userProfile={userProfile} onNavigate={setActiveModule} />;
+      case 'COTIZACIONES': return <Cotizaciones addToast={addToast} userProfile={userProfile} />;
       case 'CATALOGO': return <Catalogo addToast={addToast} userProfile={userProfile} />;
       case 'IMPORTACIONES': return <Importaciones addToast={addToast} userProfile={userProfile} />;
       case 'NOTAS_ENTREGA': return <NotasEntrega addToast={addToast} userProfile={userProfile} />;
@@ -277,6 +283,9 @@ function Dashboard({ session }) {
       case 'CENTRO_AYUDA': return <CentroAyuda addToast={addToast} userProfile={userProfile} onBack={() => setActiveModule('INICIO')} />;
       case 'PERFIL': return <PerfilUsuario addToast={addToast} userProfile={userProfile} onBack={() => setActiveModule('INICIO')} />;
       case 'PAGINA_WEB': return <PaginaWeb onBack={() => setActiveModule('INICIO')} addToast={addToast} userProfile={userProfile} />;
+      case 'TRANSPORTES': return <Transportes addToast={addToast} userProfile={userProfile} />;
+      case 'FINANZAS': return <Finanzas addToast={addToast} userProfile={userProfile} />;
+      case 'KARDEX': return <Kardex addToast={addToast} userProfile={userProfile} />;
       default: return <Inicio addToast={addToast} userProfile={userProfile} onNavigate={setActiveModule} />;
     }
   };
@@ -319,19 +328,34 @@ function Dashboard({ session }) {
             <Shield size={18} /> CONTENEDORES
           </div>
           <div className={`nav-item ${activeModule === 'CATALOGO' ? 'active' : ''}`} onClick={() => setActiveModule('CATALOGO')}>
-            <Briefcase size={18} /> CATÁLOGO
+            <Briefcase size={18} /> INVENTARIO
           </div>
           <div className={`nav-item ${activeModule === 'IMPORTACIONES' ? 'active' : ''}`} onClick={() => setActiveModule('IMPORTACIONES')}>
             <Globe size={18} /> IMPORTACIONES
           </div>
-          <div style={{ padding: '16px 24px 8px', fontSize: '11px', fontWeight: 'bold', color: '#9CA3AF', letterSpacing: '1px' }}>NEGOCIO</div>
+          <div style={{ padding: '16px 24px 8px', fontSize: '11px', fontWeight: 'bold', color: '#9CA3AF', letterSpacing: '1px' }}>VENTAS Y LOGÍSTICA</div>
+          <div className={`nav-item ${activeModule === 'COTIZACIONES' ? 'active' : ''}`} onClick={() => setActiveModule('COTIZACIONES')}>
+            <FileText size={18} /> COTIZACIONES
+          </div>
           <div className={`nav-item ${activeModule === 'NOTAS_ENTREGA' ? 'active' : ''}`} onClick={() => setActiveModule('NOTAS_ENTREGA')}>
             <Briefcase size={18} /> NOTAS DE ENTREGA
           </div>
           <div className={`nav-item ${activeModule === 'REPORTES' ? 'active' : ''}`} onClick={() => setActiveModule('REPORTES')}>
-            <BarChart size={18} /> REPORTES INTEGRANTES
+            <BarChart size={18} /> REPORTES Y ESTADÍSTICAS
           </div>
-          <div className="nav-item" onClick={() => window.open(window.location.origin + window.location.pathname + '#/tienda', '_blank')} style={{ color: '#10B981' }}>
+
+          <div style={{ padding: '16px 24px 8px', fontSize: '11px', fontWeight: 'bold', color: '#9CA3AF', letterSpacing: '1px' }}>ERP & OPERACIONES</div>
+          <div className={`nav-item ${activeModule === 'TRANSPORTES' ? 'active' : ''}`} onClick={() => setActiveModule('TRANSPORTES')}>
+            <Truck size={18} /> LOGÍSTICA & TRANSPORTES
+          </div>
+          <div className={`nav-item ${activeModule === 'FINANZAS' ? 'active' : ''}`} onClick={() => setActiveModule('FINANZAS')}>
+            <DollarSign size={18} /> CAJA & FINANZAS
+          </div>
+          <div className={`nav-item ${activeModule === 'KARDEX' ? 'active' : ''}`} onClick={() => setActiveModule('KARDEX')}>
+            <History size={18} /> KARDEX INVENTARIO
+          </div>
+
+          <div className="nav-item" onClick={() => window.open(window.location.origin + window.location.pathname + '#/tienda', '_blank')} style={{ color: '#10B981', marginTop: '8px' }}>
             <Store size={18} /> PÁGINA WEB (PÚBLICO)
           </div>
         </div>
@@ -382,7 +406,7 @@ function Dashboard({ session }) {
                       
                       {searchResults.piezas.length > 0 && (
                         <div style={{ marginBottom: '8px' }}>
-                          <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Catálogo de Piezas</div>
+                          <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Inventario de Productos</div>
                           {searchResults.piezas.map(p => (
                             <div key={p.id_pieza} onClick={() => handleSearchResultClick('CATALOGO')} style={{ padding: '6px 8px', fontSize: '13px', color: '#E2E8F0', cursor: 'pointer', borderRadius: '4px' }} className="search-result-item">
                               <Briefcase size={12} style={{ display: 'inline', marginRight: '6px' }}/> {p.nombre} {p.marca ? `(${p.marca})` : ''}
