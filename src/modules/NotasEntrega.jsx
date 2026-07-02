@@ -114,9 +114,9 @@ export default function NotasEntrega({ addToast, userProfile }) {
 
   const fetchDependencies = async () => {
     try {
-      const { data: cData } = await supabase.from('clientes').select('*').eq('estado', true);
+      const { data: cData } = await supabase.from('clientes').select('*');
       const { data: pData } = await supabase.from('proveedores').select('*').eq('estado', true);
-      const { data: tData } = await supabase.from('transportistas').select('*').eq('estado', true);
+      const { data: tData } = await supabase.from('transportistas').select('*');
       const { data: cotData } = await supabase.from('cotizaciones').select('*, clientes(nombre)').eq('estado', 'ACEPTADA');
       
       setClientes(cData || []);
@@ -294,6 +294,19 @@ export default function NotasEntrega({ addToast, userProfile }) {
       if (error) throw error;
       if (addToast) addToast('Éxito', `Estado actualizado a ${nuevoEstado}`, 'success');
       fetchNotas();
+
+      if (nuevoEstado === 'EN CAMINO') {
+        const notaActual = notas.find(n => n.id_nota === id_nota);
+        const transportista = notaActual ? transportistas.find(t => t.id_transportista == notaActual.id_transportista) : null;
+        if (notaActual && transportista && transportista.telefono) {
+          const confirmar = window.confirm(`🚛 El pedido cambió a EN CAMINO.\n\n¿Deseas enviar AHORA por WhatsApp la información de la ubicación y mercancía al chofer (${transportista.nombre}) para que salga hacia el cliente?`);
+          if (confirmar) {
+            handleActionRequest(notaActual, 'whatsapp_chofer');
+          }
+        } else if (notaActual && (!transportista || !transportista.telefono)) {
+          if (addToast) addToast('Atención', 'El pedido está EN CAMINO, pero no tiene un chofer con teléfono asignado para enviarle la ubicación.', 'warning');
+        }
+      }
     } catch (err) {
       if (addToast) addToast('Error', 'No se pudo actualizar el estado', 'error');
     }
@@ -315,6 +328,48 @@ export default function NotasEntrega({ addToast, userProfile }) {
       return;
     }
 
+    if (action === 'whatsapp_chofer') {
+      const transportista = transportistas.find(t => t.id_transportista == nota.id_transportista);
+      if (!transportista || !transportista.telefono) {
+        if (addToast) addToast('Atención', 'Esta nota no tiene un chofer con teléfono registrado asignado.', 'warning');
+        return;
+      }
+      let phone = transportista.telefono.replace(/[^0-9]/g, '');
+      
+      try {
+        const { data: detallesData } = await supabase
+          .from('detalle_liquidacion_transporte')
+          .select('*, proveedores ( nombre )')
+          .eq('id_nota', nota.id_nota);
+
+        let detallesTexto = '';
+        if (detallesData && detallesData.length > 0) {
+          detallesTexto = '\n📦 *Mercancía que trajeron para entregar:*\n' + detallesData.map(d => `• ${d.cantidad_bultos} bultos (${d.peso_kg} Kg) - Prov: ${d.proveedores?.nombre || 'General'} (Fact: ${d.numero_factura || 'S/N'})`).join('\n');
+        } else {
+          detallesTexto = `\n📦 *Mercancía que trajeron para entregar:*\n• ${nota.total_bultos} bultos | Peso total: ${nota.total_peso_kg} Kg`;
+        }
+
+        let gpsLink = `📍 *Ubicación GPS (Google Maps):*\nhttps://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${nota.clientes?.direccion || ''} Santa Cruz de la Sierra Bolivia`)}\n`;
+
+        const msg = `🚚 *ORDEN DE DESPACHO Y ENTREGA - IPCB IMPORT* 🚚\n\n` +
+          `Hola *${transportista.nombre}*, por favor dirígete a entregar la mercancía al siguiente cliente:\n\n` +
+          `📋 *Nota de Entrega N°:* ${nota.numero_nota}\n` +
+          `👤 *Cliente Destino:* ${nota.clientes?.nombre || 'Desconocido'} ${nota.clientes?.empresa ? `(${nota.clientes.empresa})` : ''}\n` +
+          `📞 *Teléfono Cliente:* ${nota.clientes?.telefono || 'Sin teléfono registrado'}\n` +
+          `🏠 *Dirección de Entrega:* ${nota.clientes?.direccion || 'Sin dirección registrada'}\n` +
+          `${gpsLink}` +
+          `${detallesTexto}\n` +
+          `${nota.observaciones ? `\n📝 *Observaciones:* ${nota.observaciones}\n` : ''}` +
+          `\n⚡ *Instrucción:* Sal hacia la ubicación del cliente para entregarle su mercancía y contáctale al llegar. ¡Gracias y buen viaje! 🚛`;
+
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+      } catch (err) {
+        console.error(err);
+        if (addToast) addToast('Error', 'No se pudieron procesar los datos para el chofer', 'error');
+      }
+      return;
+    }
+
     try {
       const { data: detallesData, error } = await supabase
         .from('detalle_liquidacion_transporte')
@@ -326,8 +381,10 @@ export default function NotasEntrega({ addToast, userProfile }) {
         
       if (error) throw error;
       
+      const transportista = transportistas.find(t => t.id_transportista == nota.id_transportista);
       setPrintData({
         ...nota,
+        transportista,
         detalles: detallesData || [],
         action: 'pdf'
       });
@@ -386,71 +443,103 @@ export default function NotasEntrega({ addToast, userProfile }) {
                   <th>BULTOS / PESO</th>
                   <th>TOTAL (Bs.)</th>
                   <th>ESTADO</th>
+                  <th>CHOFER / LOGÍSTICA</th>
                   <th>OPERADOR</th>
                   <th>ACCIONES</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px' }}>Cargando...</td></tr>
+                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px' }}>Cargando...</td></tr>
                 ) : filteredNotas.length === 0 ? (
-                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#6B7280' }}>No hay notas de entrega registradas.</td></tr>
+                  <tr><td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#6B7280' }}>No hay notas de entrega registradas.</td></tr>
                 ) : (
-                  filteredNotas.map((nota) => (
-                    <tr key={nota.id_nota}>
-                      <td style={{ fontWeight: '600' }}>{nota.numero_nota}</td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <User size={14} color="#6B7280" /> {nota.clientes?.nombre || 'Desconocido'}
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Calendar size={14} color="#6B7280" /> {nota.fecha}
-                        </div>
-                      </td>
-                      <td>{nota.total_bultos} Bultos | {nota.total_peso_kg} Kg</td>
-                      <td style={{ fontWeight: '700', color: '#134B82' }}>
-                        Bs. {parseFloat(nota.total_bs).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td>
-                        <select 
-                          value={nota.estado}
-                          onChange={(e) => handleChangeEstado(nota.id_nota, e.target.value)}
-                          style={{ 
-                            padding: '4px 8px', 
-                            background: nota.estado === 'ENTREGADA' ? '#D1FAE5' : (nota.estado === 'CANCELADA' ? '#FEE2E2' : '#FEF3C7'), 
-                            color: nota.estado === 'ENTREGADA' ? '#065F46' : (nota.estado === 'CANCELADA' ? '#991B1B' : '#92400E'), 
-                            border: 'none',
-                            borderRadius: '4px', 
-                            fontSize: '11px', 
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            outline: 'none'
-                          }}
-                        >
-                          <option value="EMITIDA">EMITIDA</option>
-                          <option value="EN CAMINO">EN CAMINO</option>
-                          <option value="ENTREGADA">ENTREGADA</option>
-                          <option value="CANCELADA">CANCELADA</option>
-                        </select>
-                      </td>
-                      <td style={{ fontSize: '12px', color: '#6B7280' }}>
-                        {nota.usuarios?.nombre || 'S/N'}
-                      </td>
-                      <td style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn-action" style={{ background: '#FEE2E2', color: '#B91C1C' }} onClick={() => handleActionRequest(nota, 'pdf')} title="Descargar PDF">
-                          <FileText size={12} /> PDF
-                        </button>
-                        <button className="btn-action" style={{ background: '#D1FAE5', color: '#047857' }} onClick={() => handleActionRequest(nota, 'whatsapp')} title="Enviar por WhatsApp">
-                          <Phone size={12} /> WA
-                        </button>
-                        <button className="btn-action" style={{ background: '#E0F2FE', color: '#0369A1' }} onClick={() => handleActionRequest(nota, 'email')} title="Enviar por Correo">
-                          <Mail size={12} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredNotas.map((nota) => {
+                    const transportista = transportistas.find(t => t.id_transportista == nota.id_transportista);
+                    return (
+                      <tr key={nota.id_nota}>
+                        <td style={{ fontWeight: '600' }}>{nota.numero_nota}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <User size={14} color="#6B7280" /> {nota.clientes?.nombre || 'Desconocido'}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Calendar size={14} color="#6B7280" /> {nota.fecha}
+                          </div>
+                        </td>
+                        <td>{nota.total_bultos} Bultos | {nota.total_peso_kg} Kg</td>
+                        <td style={{ fontWeight: '700', color: '#134B82' }}>
+                          Bs. {parseFloat(nota.total_bs).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td>
+                          <select 
+                            value={nota.estado}
+                            onChange={(e) => handleChangeEstado(nota.id_nota, e.target.value)}
+                            style={{ 
+                              padding: '4px 8px', 
+                              background: nota.estado === 'ENTREGADA' ? '#D1FAE5' : (nota.estado === 'CANCELADA' ? '#FEE2E2' : '#FEF3C7'), 
+                              color: nota.estado === 'ENTREGADA' ? '#065F46' : (nota.estado === 'CANCELADA' ? '#991B1B' : '#92400E'), 
+                              border: 'none',
+                              borderRadius: '4px', 
+                              fontSize: '11px', 
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="EMITIDA">EMITIDA</option>
+                            <option value="EN CAMINO">EN CAMINO</option>
+                            <option value="ENTREGADA">ENTREGADA</option>
+                            <option value="CANCELADA">CANCELADA</option>
+                          </select>
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#334155', textAlign: 'left' }}>
+                          {transportista ? (
+                            <div>
+                              <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', color: '#0369A1' }}>
+                                <Truck size={14} /> {transportista.nombre}
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748B' }}>
+                                {transportista.placa_vehiculo || 'S/P'} | {transportista.telefono || 'Sin telf.'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: '#9CA3AF', fontStyle: 'italic', fontSize: '11px' }}>Sin chofer asignado</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#6B7280' }}>
+                          {nota.usuarios?.nombre || 'S/N'}
+                        </td>
+                        <td style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button className="btn-action" style={{ background: '#FEE2E2', color: '#B91C1C' }} onClick={() => handleActionRequest(nota, 'pdf')} title="Descargar PDF">
+                            <FileText size={12} /> PDF
+                          </button>
+                          <button className="btn-action" style={{ background: '#D1FAE5', color: '#047857' }} onClick={() => handleActionRequest(nota, 'whatsapp')} title="Enviar por WhatsApp al Cliente">
+                            <Phone size={12} /> WA
+                          </button>
+                          <button className="btn-action" style={{ background: '#E0F2FE', color: '#0369A1' }} onClick={() => handleActionRequest(nota, 'email')} title="Enviar por Correo al Cliente">
+                            <Mail size={12} />
+                          </button>
+                          <button 
+                            className="btn-action" 
+                            style={{ 
+                              background: transportista && transportista.telefono ? '#FEF3C7' : '#F3F4F6', 
+                              color: transportista && transportista.telefono ? '#D97706' : '#9CA3AF',
+                              cursor: transportista && transportista.telefono ? 'pointer' : 'not-allowed',
+                              fontWeight: 'bold',
+                              border: transportista && transportista.telefono ? '1px solid #F59E0B' : '1px solid #E5E7EB'
+                            }} 
+                            onClick={() => handleActionRequest(nota, 'whatsapp_chofer')} 
+                            title="Enviar ubicación y mercancía al Chofer para entrega (WhatsApp)"
+                          >
+                            <Truck size={12} /> WA CHOFER
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -842,17 +931,19 @@ export default function NotasEntrega({ addToast, userProfile }) {
 
               {/* Client Info */}
               <div style={{ display: 'flex', width: '195px', marginLeft: 'auto', marginTop: '25px', fontSize: '11px', lineHeight: '1.6', textAlign: 'left' }}>
-                <div style={{ width: '70px', fontWeight: 'bold' }}>
+                <div style={{ width: '80px', fontWeight: 'bold' }}>
                   Nombre:<br/>
                   Empresa:<br/>
                   Dirección:<br/>
-                  Celular:
+                  Celular:<br/>
+                  Chofer/Transp:
                 </div>
                 <div style={{ flex: 1, fontStyle: 'italic' }}>
                   {printData.clientes?.nombre?.toUpperCase()}<br/>
                   {printData.clientes?.empresa || '-'}<br/>
                   {printData.clientes?.direccion || 'SANTA CRUZ'}<br/>
-                  {printData.clientes?.telefono || '-'}
+                  {printData.clientes?.telefono || '-'}<br/>
+                  {printData.transportista ? `${printData.transportista.nombre?.toUpperCase()} (${printData.transportista.placa_vehiculo || 'S/P'})` : '-'}
                 </div>
               </div>
             </div>
