@@ -314,16 +314,32 @@ export default function NotasEntrega({ addToast, userProfile }) {
 
   const handleActionRequest = async (nota, action) => {
     if (action === 'whatsapp') {
-      const msg = `Hola ${nota.clientes?.nombre || ''}, te enviamos tu Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toFixed(2)}.`;
-      let phone = nota.clientes?.telefono || '';
-      phone = phone.replace(/[^0-9]/g, '');
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+      const emojiWave = '\u{1F44B}';
+      const emojiDoc = '\u{1F4CB}';
+      const emojiMoney = '\u{1F4B5}';
+      const emojiSparkle = '\u{2728}';
+      
+      const nombreCliente = (nota.clientes?.nombre || 'Estimado cliente').trim();
+      const numeroNota = (nota.numero_nota || '').trim();
+      const totalBs = parseFloat(nota.total_bs || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      const msg = `Hola *${nombreCliente}* ${emojiWave}\n\n` +
+        `Desde *IPCB IMPORT* te compartimos el detalle de tu pedido:\n\n` +
+        `${emojiDoc} *Nota de Entrega N°:* ${numeroNota}\n` +
+        `${emojiMoney} *Total a pagar:* BS ${totalBs}\n\n` +
+        `Quedamos atentos para cualquier consulta o coordinación de entrega. ¡Muchas gracias por tu preferencia! ${emojiSparkle}`;
+      
+      let phone = (nota.clientes?.telefono || '').replace(/[^0-9]/g, '');
+      window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, 'WhatsAppTab');
       return;
     }
     
     if (action === 'email') {
-      const subject = `Nota de Entrega N° ${nota.numero_nota} - IPCB IMPORT`;
-      const body = `Hola ${nota.clientes?.nombre || ''},\n\nAdjunto enviamos su Nota de Entrega N° ${nota.numero_nota} por un total de BS ${parseFloat(nota.total_bs).toFixed(2)}.\n\nGracias por confiar en IPCB IMPORT.`;
+      const nombreCliente = (nota.clientes?.nombre || 'Estimado cliente').trim();
+      const numeroNota = (nota.numero_nota || '').trim();
+      const totalBs = parseFloat(nota.total_bs || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const subject = `Nota de Entrega N° ${numeroNota} - IPCB IMPORT`;
+      const body = `Hola ${nombreCliente},\n\nAdjunto enviamos su Nota de Entrega N° ${numeroNota} por un total de BS ${totalBs}.\n\nGracias por confiar en IPCB IMPORT.`;
       window.location.href = `mailto:${nota.clientes?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       return;
     }
@@ -342,27 +358,43 @@ export default function NotasEntrega({ addToast, userProfile }) {
           .select('*, proveedores ( nombre )')
           .eq('id_nota', nota.id_nota);
 
+        const emojiTruck = '\u{1F69A}'; // 🚚
+        const emojiClipboard = '\u{1F4CB}'; // 📋
+        const emojiUser = '\u{1F464}'; // 👤
+        const emojiPhone = '\u{1F4F1}'; // 📞
+        const emojiHouse = '\u{1F3E0}'; // 🏠
+        const emojiPin = '\u{1F4CD}'; // 📍
+        const emojiBox = '\u{1F4E6}'; // 📦
+        const emojiNote = '\u{1F4DD}'; // 📝
+        const emojiZap = '\u{26A1}'; // ⚡
+        const emojiLorry = '\u{1F69B}'; // 🚛
+
         let detallesTexto = '';
         if (detallesData && detallesData.length > 0) {
-          detallesTexto = '\n📦 *Mercancía que trajeron para entregar:*\n' + detallesData.map(d => `• ${d.cantidad_bultos} bultos (${d.peso_kg} Kg) - Prov: ${d.proveedores?.nombre || 'General'} (Fact: ${d.numero_factura || 'S/N'})`).join('\n');
+          detallesTexto = `\n${emojiBox} *Mercancía que trajeron para entregar:*\n` + detallesData.map(d => `• ${d.cantidad_bultos} bultos (${d.peso_kg} Kg) - Prov: ${d.proveedores?.nombre || 'General'} (Fact: ${d.numero_factura || 'S/N'})`).join('\n');
         } else {
-          detallesTexto = `\n📦 *Mercancía que trajeron para entregar:*\n• ${nota.total_bultos} bultos | Peso total: ${nota.total_peso_kg} Kg`;
+          detallesTexto = `\n${emojiBox} *Mercancía que trajeron para entregar:*\n• ${nota.total_bultos} bultos | Peso total: ${nota.total_peso_kg} Kg`;
         }
 
-        let gpsLink = `📍 *Ubicación GPS (Google Maps):*\nhttps://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${nota.clientes?.direccion || ''} Santa Cruz de la Sierra Bolivia`)}\n`;
+        const direccionTexto = nota.clientes?.direccion || 'Sin dirección registrada';
+        const dirParaMapa = nota.clientes?.direccion && !nota.clientes.direccion.toLowerCase().includes('sin dirección')
+          ? nota.clientes.direccion.trim()
+          : '';
+        const queryMap = encodeURIComponent(`${dirParaMapa ? dirParaMapa + ' ' : ''}Santa Cruz de la Sierra Bolivia`);
+        let gpsLink = `${emojiPin} *Ubicación GPS (Google Maps):*\nhttps://www.google.com/maps/search/?api=1&query=${queryMap}\n`;
 
-        const msg = `🚚 *ORDEN DE DESPACHO Y ENTREGA - IPCB IMPORT* 🚚\n\n` +
+        const msg = `${emojiTruck} *ORDEN DE DESPACHO Y ENTREGA - IPCB IMPORT* ${emojiTruck}\n\n` +
           `Hola *${transportista.nombre}*, por favor dirígete a entregar la mercancía al siguiente cliente:\n\n` +
-          `📋 *Nota de Entrega N°:* ${nota.numero_nota}\n` +
-          `👤 *Cliente Destino:* ${nota.clientes?.nombre || 'Desconocido'} ${nota.clientes?.empresa ? `(${nota.clientes.empresa})` : ''}\n` +
-          `📞 *Teléfono Cliente:* ${nota.clientes?.telefono || 'Sin teléfono registrado'}\n` +
-          `🏠 *Dirección de Entrega:* ${nota.clientes?.direccion || 'Sin dirección registrada'}\n` +
+          `${emojiClipboard} *Nota de Entrega N°:* ${nota.numero_nota}\n` +
+          `${emojiUser} *Cliente Destino:* ${nota.clientes?.nombre || 'Desconocido'} ${nota.clientes?.empresa ? `(${nota.clientes.empresa})` : ''}\n` +
+          `${emojiPhone} *Teléfono Cliente:* ${nota.clientes?.telefono || 'Sin teléfono registrado'}\n` +
+          `${emojiHouse} *Dirección de Entrega:* ${direccionTexto}\n` +
           `${gpsLink}` +
           `${detallesTexto}\n` +
-          `${nota.observaciones ? `\n📝 *Observaciones:* ${nota.observaciones}\n` : ''}` +
-          `\n⚡ *Instrucción:* Sal hacia la ubicación del cliente para entregarle su mercancía y contáctale al llegar. ¡Gracias y buen viaje! 🚛`;
+          `${nota.observaciones ? `\n${emojiNote} *Observaciones:* ${nota.observaciones}\n` : ''}` +
+          `\n${emojiZap} *Instrucción:* Sal hacia la ubicación del cliente para entregarle su mercancía y contáctale al llegar. ¡Gracias y buen viaje! ${emojiLorry}`;
 
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, 'WhatsAppTab');
       } catch (err) {
         console.error(err);
         if (addToast) addToast('Error', 'No se pudieron procesar los datos para el chofer', 'error');
