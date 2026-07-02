@@ -7,7 +7,7 @@ import {
   CheckCircle, AlertCircle, Info, X, Store, Camera, Truck, DollarSign, History
 } from 'lucide-react';
 
-const logoEmpresa = '/logo.png';
+const logoEmpresa = import.meta.env.BASE_URL + 'logo.png';
 import Clientes from './modules/Clientes';
 import Proveedores from './modules/Proveedores';
 import Contenedores from './modules/Contenedores';

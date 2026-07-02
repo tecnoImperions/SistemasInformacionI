@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../lib/store';
 import { Search, Plus, X, Printer, FileText, Trash2, User, Calendar, Truck, MapPin, Phone, Mail } from 'lucide-react';
-const logoImg = '/logo.png';
+const logoImg = import.meta.env.BASE_URL + 'logo.png';
 export default function NotasEntrega({ addToast, userProfile }) {
   const { tipoCambio } = useStore();
   const [notas, setNotas] = useState([]);
@@ -69,7 +69,7 @@ export default function NotasEntrega({ addToast, userProfile }) {
       margin: 0,
       filename: filename,
       image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 2, useCORS: true, allowTaint: true, scrollX: 0, scrollY: 0 },
       jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
     }).from(element).save().then(() => setPrintData(null));
   };
